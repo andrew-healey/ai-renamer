@@ -2,7 +2,8 @@ language: node_js
 sudo: true
 addons:
   apt:
-    packages: ['libmicrohttpd-dev','libcurl4-openssl-dev','bazel','libgoogle-glog-dev','libgflags-dev','libc++-dev']
+    sources: ['ubuntu-toolchain-r-test']
+    packages: ['libmicrohttpd-dev','libcurl4-openssl-dev','bazel','libgoogle-glog-dev','libgflags-dev','libc++-dev','wget','pkg-config']
 before_install: "npm install -g npm"
 node_js:
     - "14"
