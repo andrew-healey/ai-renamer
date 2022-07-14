@@ -1,0 +1,3 @@
+function chunkData() { 
+	foo();
+}

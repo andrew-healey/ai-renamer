@@ -1,0 +1,6 @@
+[submodule "UnuglifyJS"]
+	path = UnuglifyJS
+	url = https://github.com/andrew-healey/UnuglifyJS
+[submodule "Nice2Predict"]
+	path = Nice2Predict
+	url = https://github.com/andrew-healey/Nice2Predict
