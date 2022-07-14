@@ -1,0 +1,16 @@
+language: node_js
+sudo: true
+addons:
+  apt:
+    packages: ['libmicrohttpd-dev','libcurl4-openssl-dev','bazel",'libgoogle-glog-dev','libgflags-dev','libc++-dev']
+before_install: "npm install -g npm"
+node_js:
+    - "14"
+install:
+  - cd Nice2Predict/ && bazel build //...
+  - cd UnuglifyJS/ && npm ci
+  - npm i
+before_script:
+  - cd UnuglifyJS/ && ./extract_features.py --dir . > ../training_data
+  - pwd
+  - export BASE_PATH=$(pwd) && cd Nice2Predict/ && bazel run n2p/training/train_json -- --logtostderr -num_threads 16 --input $BASE_PATH/training_data --out_model $BASE_PATH/model/

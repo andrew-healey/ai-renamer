@@ -4,6 +4,12 @@ Intended to become a solid AI renaming tool for JS with current technology.
 
 Basic structure is OpenAI Codex + grease + custom/modern/JS-friendly recreation of JSNice.
 
+## Clone
+
+```sh
+git clone --recurse-submodules https://github.com/andrew-healey/ai-renamer.git
+```
+
 ## Build/Install
 
 ### Nice2Predict
@@ -21,18 +27,13 @@ cd UnuglifyJS
 npm i
 ```
 
-### UnuglifyJS Remake
+> Installation can take a while (my most recent install took 11 minutes).
+
+### UnuglifyJS Remake + Integrated Renamer Tool
 
 ```sh
-cd n2p-frontend
 npm i
-```
-
-### Integrated Renamer Tool
-
-```sh
 cd full-renaming
-npm i
 touch .env
 echo "CODEX_KEY=" > .env
 ```
@@ -62,7 +63,7 @@ This should create a file of features named `training_data/` at the top level of
 ```sh
 export BASE_PATH=$(pwd)
 cd Nice2Predict/
-bazel run n2p/training/train_json -- --logtostderr -num_threads 16 --input $BASE_PATH/UnuglifyJS/training_data --out_model $BASE_PATH/model/
+bazel run n2p/training/train_json -- --logtostderr -num_threads 16 --input $BASE_PATH/training_data --out_model $BASE_PATH/model/
 ```
 
 This will create a folder `model/` at the monorepo level.

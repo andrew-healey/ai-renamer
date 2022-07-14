@@ -107,16 +107,17 @@ const extractFeats=(ast)=>{
 		// Variable | Shift.Node
 		const postLookup=(sess(leafNode).lookupVariables().get(0)) ?? leafNode;
 
-    if (featureCache.has(leafNode)) return featureCache.get(leafNode);
+    if (featureCache.has(postLookup)) return featureCache.get(postLookup);
     const ret = featureCache.size;
-    featureCache.set(leafNode, ret);
+    featureCache.set(postLookup, ret);
     return ret;
   };
-	const getAllFeatures=
 
+	const relationalFeats=extractRelations(ast,getFeatureId);
+	// TODO make function features.
 };
 
-const extractGraphFeats = (ast,getFeatureId) => {
+const extractRelations= (ast,getFeatureId) => {
   const ancestry = []; // Constant because I'll use mutations for speed. Queue.
   const pathsFound = [];
 
