@@ -7,4 +7,6 @@ class PathExtractorReducer extends ThunkedMonoidalReducer {
 			concatThunk:(a,b)=>new Set([...a,...b()]),
 		})
 	}
+
+	static 
 }

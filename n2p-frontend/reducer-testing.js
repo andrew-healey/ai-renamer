@@ -2,10 +2,9 @@ import traverser from "shift-traverser";
 import { refactor } from "shift-refactor";
 import { readFileSync } from "node:fs";
 import assert from "node:assert";
+import { codeGen } from "shift-codegen";
 
 const { traverse } = traverser;
-
-console.log(traverse);
 
 const sample = readFileSync("./tests/escape_backslash.js", "utf8");
 
@@ -55,6 +54,7 @@ const nodeAttributes = {
   LiteralRegExpExpression: {
     leaf,
     type: "RegExp",
+    value: (node) => encodeURIComponent(codeGen(node)),
   },
   _StaticProperty: {
     leaf,
@@ -99,25 +99,87 @@ const nodeAttributes = {
   // TODO the rest
 };
 
-const extractFeats=(ast)=>{
-	const sess=refactor(ast);
+const extractFeats = (ast) => {
+  const sess = refactor(ast);
 
   const featureCache = new Map();
   const getFeatureId = (leafNode) => {
-		// Variable | Shift.Node
-		const postLookup=(sess(leafNode).lookupVariables().get(0)) ?? leafNode;
+    // Variable | Shift.Node
+    const getVar = (node) => {
+      try {
+        return sess(node).lookupVariable()[0];
+      } catch (err) {
+        return undefined;
+      }
+    };
+    const postLookup = getVar(leafNode) ?? leafNode;
 
-    if (featureCache.has(postLookup)) return featureCache.get(postLookup);
+    if (featureCache.has(postLookup)) return postLookup;
     const ret = featureCache.size;
     featureCache.set(postLookup, ret);
-    return ret;
+    return postLookup;
   };
 
-	const relationalFeats=extractRelations(ast,getFeatureId);
-	// TODO make function features.
+  const relationalFeats = extractRelations(ast, getFeatureId);
+  // TODO make function features.
+
+  const entries = [...featureCache.entries()];
+
+	const hasTypeAnnotation=(node)=>!!(nodeAttributes[node.type]?.type);
+  const ordering = ([node, orderFound]) =>
+    orderFound + (hasTypeAnnotation(node) ? entries.length: 0); // Variables should always be before things with type annotations.
+
+  const reSortedEntries = entries
+    .sort((a, b) => ordering(a) - ordering(b))
+    .map(([node], idx) => [node, idx]);
+
+  const reSortedMap = new Map(reSortedEntries);
+
+  const relationalsWithId = relationalFeats
+    .map(({ a, b, ...rest }) => ({
+      a: reSortedMap.get(a),
+      b: reSortedMap.get(b),
+      ...rest,
+    }))
+    .filter(({ a, b }) => a < b); // Always put the lower-indexed feature on the left. This has a side effect of putting as few [type]-paths on the left as possible.
+
+  const globalState = sess.session.globalSession; // type GlobalScope
+
+  const features = [...reSortedMap.entries()].map(([nodeOrVar, id]) => {
+    const { type } = nodeOrVar;
+    const isNode = type !== undefined;
+    if (isNode) {
+      const { value } = nodeAttributes[type];
+      const val = value ? value(nodeOrVar) : nodeOrVar.value;
+      return {
+        v: id,
+        giv: val,
+      };
+    }
+    // Assume it's a variable.
+    const isGlobal = globalState.variables.has(nodeOrVar);
+
+    const { references } = nodeOrVar;
+    if (!references) debugger;
+    const [reference] = references;
+    assert(reference, "Variable should have at least one reference.");
+
+    const name = sess(reference.node).print();
+
+    return {
+      v: id,
+      [isGlobal ? "giv" : "inf"]: name,
+    };
+    debugger;
+  });
+
+  return {
+    query: relationalsWithId,
+    assign: features,
+  };
 };
 
-const extractRelations= (ast,getFeatureId) => {
+const extractRelations = (ast, getFeatureId) => {
   const ancestry = []; // Constant because I'll use mutations for speed. Queue.
   const pathsFound = [];
 
@@ -133,7 +195,7 @@ const extractRelations= (ast,getFeatureId) => {
         if (behavior.leaf === true) {
           addPath();
         } else if (typeof behavior.leaf === "function") {
-          behavior.leaf(ancestry, node).forEach(addPath);
+          pathsFound.push(behavior.leaf(ancestry, node));
         }
       }
     },
@@ -159,22 +221,30 @@ const extractRelations= (ast,getFeatureId) => {
   const createPathTree = (paths, matchedUntil = 0) => {
     if (paths.length === 1) return paths[0];
     const uniques = splitUniques(paths, matchedUntil);
-    console.log(uniques);
     return uniques.map((unique) => createPathTree(unique, matchedUntil + 1));
   };
 
   const pathTree = createPathTree(pathsFound);
 
-  console.log(JSON.stringify(pathTree));
-
   // Pick every pair of paths which can be travelled between with <4 steps.
 
-  const getLeavesAtDepth = (lastSharedAncestor, depth) => {
+  const onlyPaths =
+    (func) =>
+    (...args) => {
+      const ret = func(...args);
+      return Array.isArray(ret)
+        ? ret.filter((possiblePath) => possiblePath[0]?.type !== undefined)
+        : ret;
+    };
+
+  const getLeavesAtDepth = onlyPaths((lastSharedAncestor, depth) => {
     if (depth === 0) return lastSharedAncestor;
-    return lastSharedAncestor.flatMap((child) =>
-      getLeavesAtDepth(child, depth - 1)
-    );
-  };
+    return Array.isArray(lastSharedAncestor)
+      ? lastSharedAncestor.flatMap((child) =>
+          getLeavesAtDepth(child, depth - 1)
+        )
+      : [];
+  });
 
   const getPairsSharingAncestor = (lastSharedAncestor, ancestorDepth) => {
     const oneToNum = (num) =>
@@ -182,7 +252,7 @@ const extractRelations= (ast,getFeatureId) => {
         .fill(0)
         .map((_, idx) => idx + 1);
     const nodesAtDepths = oneToNum(3).map((depth) =>
-      getLeavesAtDepth(pathTree, depth)
+      getLeavesAtDepth(lastSharedAncestor, depth)
     );
 
     return oneToNum(3).flatMap((rightDepth) => {
@@ -201,9 +271,9 @@ const extractRelations= (ast,getFeatureId) => {
 
   const getAllPairs = (ancestor, depth = 0) => {
     const ownPairs = getPairsSharingAncestor(ancestor, depth);
-    const childPairs = ancestor.flatMap((child) =>
-      getAllPairs(child, depth + 1)
-    );
+    const childPairs = Array.isArray(ancestor)
+      ? ancestor.flatMap((child) => getAllPairs(child, depth + 1))
+      : [];
     return [...ownPairs, ...childPairs];
   };
 
@@ -212,14 +282,14 @@ const extractRelations= (ast,getFeatureId) => {
   // TODO stringify all the pairs.
 
   const pathToString = (truncatedPath) =>
-    path.flatMap((node, idx) => {
+    truncatedPath.flatMap((node, idx) => {
       const attrs = nodeAttributes[node.type];
       if (!attrs) return [];
 
       const { name, propIdxes } = attrs;
 
       if (!name || !propIdxes) {
-        const { type } = node;
+        const { type } = attrs;
         if (type) return ["-", type];
         return []; // In case there's no type, like for identifiers.
       }
@@ -233,8 +303,8 @@ const extractRelations= (ast,getFeatureId) => {
         return [node[property]];
       });
 
-      const myChild = path[idx + 1];
-      const childIdx = Math.max(0, path.indexOf(myChild)); // When it's not found, default to zero. This gives [0] for Dot property names.
+      const myChild = truncatedPath[idx + 1];
+      const childIdx = Math.max(0, orderedProps.indexOf(myChild)); // When it's not found, default to zero. This gives [0] for Dot property names.
 
       return [nameVal, `[${childIdx}]`];
     });
@@ -246,10 +316,11 @@ const extractRelations= (ast,getFeatureId) => {
     return path.slice(firstIndexing).reverse();
   };
   const forwardPath = (path) => {
+    return path;
     const firstIndexing = path.findIndex((stringPart) =>
       stringPart.startsWith("[")
     );
-    return path.slice(firstIndexing + 1);
+    return path.slice(firstIndexing - 1);
   };
 
   const featureObjs = allPairs
@@ -257,22 +328,24 @@ const extractRelations= (ast,getFeatureId) => {
       const [left, right, ancestorDepth] = pair;
       const truncLeft = left.slice(ancestorDepth);
       const truncRight = right.slice(ancestorDepth);
-      const leftPath = reversePath(pathToString(truncLeft));
-      const rightPath = forwardPath(pathToString(truncRight));
+      const leftPath = reversePath(pathToString(truncLeft)).join("");
+      const rightPath = forwardPath(pathToString(truncRight)).join("");
       const relation = `${leftPath}:${rightPath}`;
       return {
         a: left[left.length - 1],
         b: right[right.length - 1],
         fx: relation,
+        aPath: pathToString(left).join(""),
+        bPath: pathToString(right).join(""),
       };
     })
-    .map(({ a, b, fx }) => ({
+    .map(({ a, b, fx, ...debug }) => ({
       a: getFeatureId(a),
       b: getFeatureId(b),
       fx,
+      ...debug,
     }));
-	
-	
+  return featureObjs;
 };
 
-getPath(ast);
+console.log(extractFeats(ast));
