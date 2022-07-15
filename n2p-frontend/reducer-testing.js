@@ -104,6 +104,7 @@ const extractFeats = (ast) => {
 
   const featureCache = new Map();
   const getFeatureId = (leafNode) => {
+		if(leafNode.name==="arguments") debugger;
     // Variable | Shift.Node
     const getVar = (node) => {
       try {
@@ -121,7 +122,8 @@ const extractFeats = (ast) => {
   };
 
   const relationalFeats = extractRelations(ast, getFeatureId);
-  // TODO make function features.
+	const functionFeats=extractFunctions(sess,getFeatureId);
+	const contextFeats=extractContexts(sess,getFeatureId);
 
   const entries = [...featureCache.entries()];
 
@@ -143,6 +145,19 @@ const extractFeats = (ast) => {
     }))
     .filter(({ a, b }) => a < b); // Always put the lower-indexed feature on the left. This has a side effect of putting as few [type]-paths on the left as possible.
 
+	const functionsWithId=functionFeats.map(({a,b,...rest})=>({
+		a:reSortedMap.get(a),
+		b:reSortedMap.get(b),
+		...rest
+	}));
+
+	const contextsWithId=contextFeats.map(({n,...rest})=>({
+		n:n.map(el=>reSortedMap.get(el)),
+		...rest,
+	}));
+
+	const allQueries=[...relationalsWithId,...functionsWithId,...contextsWithId];
+
   const globalState = sess.session.globalSession; // type GlobalScope
 
   const features = [...reSortedMap.entries()].map(([nodeOrVar, id]) => {
@@ -159,22 +174,21 @@ const extractFeats = (ast) => {
     // Assume it's a variable.
     const isGlobal = globalState.variables.has(nodeOrVar);
 
-    const { references } = nodeOrVar;
-    if (!references) debugger;
-    const [reference] = references;
-    assert(reference, "Variable should have at least one reference.");
+    const { references,declarations } = nodeOrVar;
+		assert(references,"Looked-up variable should be a Variable.")
+    const [refOrDecl] = [...references,...declarations];;
+    assert(refOrDecl, "Variable should have at least one reference.");
 
-    const name = sess(reference.node).print();
+    const name = sess(refOrDecl.node).print();
 
     return {
       v: id,
       [isGlobal ? "giv" : "inf"]: name,
     };
-    debugger;
   });
 
   return {
-    query: relationalsWithId,
+    query: allQueries,
     assign: features,
   };
 };
@@ -317,10 +331,6 @@ const extractRelations = (ast, getFeatureId) => {
   };
   const forwardPath = (path) => {
     return path;
-    const firstIndexing = path.findIndex((stringPart) =>
-      stringPart.startsWith("[")
-    );
-    return path.slice(firstIndexing - 1);
   };
 
   const featureObjs = allPairs
@@ -343,9 +353,69 @@ const extractRelations = (ast, getFeatureId) => {
       a: getFeatureId(a),
       b: getFeatureId(b),
       fx,
-      ...debug,
+      //...debug,
     }));
   return featureObjs;
 };
+
+const extractFunctions=(sess,getFeatureId)=>{
+	const $decls=sess("FunctionDeclaration");
+
+	// TODO handle more implicit things beyond FunctionDeclarations.
+	const declRelations=$decls.map(decl=>{
+		const {params,name}=decl;
+		return {
+			params,
+			variable:name
+		}
+	});
+
+	const allRelations=[...declRelations];
+
+	const fnRels=allRelations.flatMap(({params,variable})=>{
+
+		const paramIds=sess(params)("BindingIdentifier");
+		const funcId=getFeatureId(variable);
+
+		const fnPars=paramIds.map(paramId=>({
+			a:getFeatureId(paramId),
+			b:funcId,
+			fx:"FNPAR"
+		}));
+
+		const fnCalls=paramIds.filter(paramId=>{
+			const [variable]=sess(paramId).lookupVariable();
+			const {references}=variable;
+			const $refs=sess(references);
+			const $parents=$refs.parents();
+			const $calls=$parents.filter(parent=>parent.type==="CallExpression");
+			return $calls.nodes.length>0;
+		})
+		.map(paramId=>({
+			a:getFeatureId(paramId),
+			b:funcId,
+			fx:"FNCALL"
+		}));
+
+		return [...fnPars,...fnCalls];
+
+	});
+
+	return fnRels;
+};
+
+const collectVarLists=(scope)=>[scope.variableList.filter(isUseful),...scope.children.flatMap(collectVarLists)];
+
+const extractContexts=(sess,getFeatureId)=>{
+	const globalState=sess.session.globalSession; // type GlobalState
+	const globalScope=globalState.lookupTable.scope;
+	const variableSets=collectVarLists(globalScope).filter(list=>list.length>0);
+	return variableSets.map(variableSet=>({
+		cn:"!=",
+		n:variableSet.map(getFeatureId)
+	}))
+}
+
+const isUseful=(variable)=>variable.declarations.length+variable.references.length>0;
 
 console.log(extractFeats(ast));
