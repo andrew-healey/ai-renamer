@@ -68,6 +68,14 @@ const nodeAttributes = {
     name: "New",
     propIdxes: ["callee", "...arguments"],
   },
+  FunctionExpression: {
+    name: "Function",
+    propIdxes: ["...params"],
+  },
+  ArrowExpression: {
+    name: "Function",
+    propIdxes: ["...params"],
+  },
   ComputedMemberExpression: {
     name: "Sub",
     propIdxes: ["object", "expression"],
@@ -333,7 +341,8 @@ const extractRelations = (ast, getFeatureId) => {
       const orderedProps = propIdxes.flatMap((property) => {
         if (property.startsWith("...")) {
           const restedProp = property.slice(3);
-          return node[restedProp];
+          const el=node[restedProp];
+					return Array.isArray(el)?el:el.items??el.elements; // TODO define an attribute of, i.e. ArrayExpression, which turns it into an array.
         }
         return [node[property]];
       });
@@ -382,7 +391,6 @@ const extractRelations = (ast, getFeatureId) => {
 const extractFunctions = (sess, getFeatureId) => {
   const $decls = sess("FunctionDeclaration");
 
-  // TODO handle more implicit things beyond FunctionDeclarations.
   const declRelations = $decls.map((decl) => {
     const { params, name } = decl;
     return {
@@ -391,7 +399,16 @@ const extractFunctions = (sess, getFeatureId) => {
     };
   });
 
-  const allRelations = [...declRelations];
+	const $varFuncs=sess("VariableDeclarator > :matches(FunctionExpression, ArrowExpression)").parents();
+	const varDeclRelations=$varFuncs.map((varFunc)=>{
+		const {binding,init}=varFunc;
+		return {
+			params:init.params,
+			variable:binding,
+		}
+	});
+
+  const allRelations = [...declRelations, ...varDeclRelations];
 
   const fnRels = allRelations.flatMap(({ params, variable }) => {
     const paramIds = sess(params)("BindingIdentifier");
