@@ -104,7 +104,7 @@ const extractFeats = (ast) => {
 
   const featureCache = new Map();
   const getFeatureId = (leafNode) => {
-		if(leafNode.name==="arguments") debugger;
+    if (leafNode.name === "arguments") debugger;
     // Variable | Shift.Node
     const getVar = (node) => {
       try {
@@ -122,14 +122,14 @@ const extractFeats = (ast) => {
   };
 
   const relationalFeats = extractRelations(ast, getFeatureId);
-	const functionFeats=extractFunctions(sess,getFeatureId);
-	const contextFeats=extractContexts(sess,getFeatureId);
+  const functionFeats = extractFunctions(sess, getFeatureId);
+  const contextFeats = extractContexts(sess, getFeatureId);
 
   const entries = [...featureCache.entries()];
 
-	const hasTypeAnnotation=(node)=>!!(nodeAttributes[node.type]?.type);
+  const hasTypeAnnotation = (node) => !!nodeAttributes[node.type]?.type;
   const ordering = ([node, orderFound]) =>
-    orderFound + (hasTypeAnnotation(node) ? entries.length: 0); // Variables should always be before things with type annotations.
+    orderFound + (hasTypeAnnotation(node) ? entries.length : 0); // Variables should always be before things with type annotations.
 
   const reSortedEntries = entries
     .sort((a, b) => ordering(a) - ordering(b))
@@ -145,20 +145,25 @@ const extractFeats = (ast) => {
     }))
     .filter(({ a, b }) => a < b); // Always put the lower-indexed feature on the left. This has a side effect of putting as few [type]-paths on the left as possible.
 
-	const functionsWithId=functionFeats.map(({a,b,...rest})=>({
-		a:reSortedMap.get(a),
-		b:reSortedMap.get(b),
-		...rest
-	}));
+  const functionsWithId = functionFeats.map(({ a, b, ...rest }) => ({
+    a: reSortedMap.get(a),
+    b: reSortedMap.get(b),
+    ...rest,
+  }));
 
-	const contextsWithId=contextFeats.map(({n,...rest})=>({
-		n:n.map(el=>reSortedMap.get(el)),
-		...rest,
-	}));
+  const contextsWithId = contextFeats.map(({ n, ...rest }) => ({
+    n: n.map((el) => reSortedMap.get(el)),
+    ...rest,
+  }));
 
-	const allQueries=[...relationalsWithId,...functionsWithId,...contextsWithId];
+  const allQueries = [
+    ...relationalsWithId,
+    ...functionsWithId,
+    ...contextsWithId,
+  ];
 
   const globalState = sess.session.globalSession; // type GlobalScope
+  const globalScope = globalState.lookupTable.scope;
 
   const features = [...reSortedMap.entries()].map(([nodeOrVar, id]) => {
     const { type } = nodeOrVar;
@@ -172,11 +177,11 @@ const extractFeats = (ast) => {
       };
     }
     // Assume it's a variable.
-    const isGlobal = globalState.variables.has(nodeOrVar);
+    const isGlobal = globalScope.variableList.includes(nodeOrVar);
 
-    const { references,declarations } = nodeOrVar;
-		assert(references,"Looked-up variable should be a Variable.")
-    const [refOrDecl] = [...references,...declarations];;
+    const { references, declarations } = nodeOrVar;
+    assert(references, "Looked-up variable should be a Variable.");
+    const [refOrDecl] = [...references, ...declarations];
     assert(refOrDecl, "Variable should have at least one reference.");
 
     const name = sess(refOrDecl.node).print();
@@ -187,8 +192,10 @@ const extractFeats = (ast) => {
     };
   });
 
+	const infQueries=allQueries.filter(({a,b})=>(a===undefined||b===undefined) || "inf" in features[a] || "inf" in features[b]); // Exclude all relationships between definitely-valued features--i.e. between two strings.
+
   return {
-    query: allQueries,
+    query: infQueries,
     assign: features,
   };
 };
@@ -260,6 +267,20 @@ const extractRelations = (ast, getFeatureId) => {
       : [];
   });
 
+	// Check the last shared ancestor of each path. This lets us check--are we ever matching A-B-C with A-B-D, *instead of* B-C with B-D?
+	const getSharedAncestor=(left,right,matchIdx)=>{
+		const revLeft=[...left].reverse();
+		/*
+		const stringify=path=>path.map(b=>b.type).join(".")
+		console.log(stringify(left));
+		console.log(stringify(right));
+		console.log("Intended idx:",matchIdx,left[matchIdx].type);
+		console.log("-".repeat(20));
+		*/
+		const ret= revLeft.find((l_node,index)=>l_node===right[left.length - index - 1]); // For the last (idx 0) left node, map to the last (length-1) real index.
+		return ret;
+	};
+
   const getPairsSharingAncestor = (lastSharedAncestor, ancestorDepth) => {
     const oneToNum = (num) =>
       Array(num)
@@ -278,7 +299,7 @@ const extractRelations = (ast, getFeatureId) => {
           return rightNodes.map((rightNode) => {
             return [leftNode, rightNode, ancestorDepth];
           });
-        });
+        }).filter(([leftNode,rightNode])=>getSharedAncestor(leftNode,rightNode,ancestorDepth)===leftNode[ancestorDepth]); // Only match B-C with B-D, not A-B-C with A-B-D.
       });
     });
   };
@@ -358,64 +379,74 @@ const extractRelations = (ast, getFeatureId) => {
   return featureObjs;
 };
 
-const extractFunctions=(sess,getFeatureId)=>{
-	const $decls=sess("FunctionDeclaration");
+const extractFunctions = (sess, getFeatureId) => {
+  const $decls = sess("FunctionDeclaration");
 
-	// TODO handle more implicit things beyond FunctionDeclarations.
-	const declRelations=$decls.map(decl=>{
-		const {params,name}=decl;
-		return {
-			params,
-			variable:name
-		}
-	});
+  // TODO handle more implicit things beyond FunctionDeclarations.
+  const declRelations = $decls.map((decl) => {
+    const { params, name } = decl;
+    return {
+      params,
+      variable: name,
+    };
+  });
 
-	const allRelations=[...declRelations];
+  const allRelations = [...declRelations];
 
-	const fnRels=allRelations.flatMap(({params,variable})=>{
+  const fnRels = allRelations.flatMap(({ params, variable }) => {
+    const paramIds = sess(params)("BindingIdentifier");
+    const funcId = getFeatureId(variable);
 
-		const paramIds=sess(params)("BindingIdentifier");
-		const funcId=getFeatureId(variable);
+    const fnPars = paramIds.map((paramId) => ({
+      a: getFeatureId(paramId),
+      b: funcId,
+      fx: "FNPAR",
+    }));
 
-		const fnPars=paramIds.map(paramId=>({
-			a:getFeatureId(paramId),
-			b:funcId,
-			fx:"FNPAR"
-		}));
+    const fnCalls = paramIds
+      .filter((paramId) => {
+        const [variable] = sess(paramId).lookupVariable();
+        const { references } = variable;
+        const $refs = sess(references.map(ref=>ref.node));
+        const $parents = $refs.parents();
+        const $calls = $parents.filter(
+          (parent) => parent.type === "CallExpression"
+        );
+        return $calls.nodes.length > 0;
+      })
+      .map((paramId) => ({
+        a: getFeatureId(paramId),
+        b: funcId,
+        fx: "FNCALL",
+      }));
 
-		const fnCalls=paramIds.filter(paramId=>{
-			const [variable]=sess(paramId).lookupVariable();
-			const {references}=variable;
-			const $refs=sess(references);
-			const $parents=$refs.parents();
-			const $calls=$parents.filter(parent=>parent.type==="CallExpression");
-			return $calls.nodes.length>0;
-		})
-		.map(paramId=>({
-			a:getFeatureId(paramId),
-			b:funcId,
-			fx:"FNCALL"
-		}));
+    return [...fnPars, ...fnCalls];
+  });
 
-		return [...fnPars,...fnCalls];
-
-	});
-
-	return fnRels;
+  return fnRels;
 };
 
-const collectVarLists=(scope)=>[scope.variableList.filter(isUseful),...scope.children.flatMap(collectVarLists)];
+const collectVarLists = (scope) => [
+  [
+		...scope.variableList.filter(isUseful),
+		...[...scope.through._.values()].map(([reference])=>reference.node),
+	], // Lock down both the scope's *owned variables* and its *referenced* variables.
+  ...scope.children.flatMap(collectVarLists),
+];
 
-const extractContexts=(sess,getFeatureId)=>{
-	const globalState=sess.session.globalSession; // type GlobalState
-	const globalScope=globalState.lookupTable.scope;
-	const variableSets=collectVarLists(globalScope).filter(list=>list.length>0);
-	return variableSets.map(variableSet=>({
-		cn:"!=",
-		n:variableSet.map(getFeatureId)
-	}))
-}
+const extractContexts = (sess, getFeatureId) => {
+  const globalState = sess.session.globalSession; // type GlobalState
+  const globalScope = globalState.lookupTable.scope;
+  const variableSets = collectVarLists(globalScope).filter(
+    (list) => list.length > 1
+  );
+  return variableSets.map((variableSet) => ({
+    cn: "!=",
+    n: variableSet.map(getFeatureId),
+  }));
+};
 
-const isUseful=(variable)=>variable.declarations.length+variable.references.length>0;
+const isUseful = (variable) =>
+  variable.declarations.length + variable.references.length > 0;
 
-console.log(extractFeats(ast));
+console.log(JSON.stringify(extractFeats(ast), null, 2));
