@@ -1,15 +1,9 @@
 import traverser from "shift-traverser";
 import { refactor } from "shift-refactor";
-import { readFileSync } from "node:fs";
 import assert from "node:assert";
 import { codeGen } from "shift-codegen";
 
 const { traverse } = traverser;
-
-const sample = readFileSync("./tests/escape_backslash.js", "utf8");
-
-const sess = refactor(sample);
-const ast = sess.nodes[0];
 
 /*
 type Leaf = boolean | (ancestry,node)=>Path[];
@@ -107,8 +101,8 @@ const nodeAttributes = {
   // TODO the rest
 };
 
-const extractFeats = (ast) => {
-  const sess = refactor(ast);
+export const extractFeats = (sess) => {
+  const ast = sess.nodes[0];
 
   const featureCache = new Map();
   const getFeatureId = (leafNode) => {
@@ -200,7 +194,13 @@ const extractFeats = (ast) => {
     };
   });
 
-	const infQueries=allQueries.filter(({a,b})=>(a===undefined||b===undefined) || "inf" in features[a] || "inf" in features[b]); // Exclude all relationships between definitely-valued features--i.e. between two strings.
+  const infQueries = allQueries.filter(
+    ({ a, b }) =>
+      a === undefined ||
+      b === undefined ||
+      "inf" in features[a] ||
+      "inf" in features[b]
+  ); // Exclude all relationships between definitely-valued features--i.e. between two strings.
 
   return {
     query: infQueries,
@@ -275,19 +275,21 @@ const extractRelations = (ast, getFeatureId) => {
       : [];
   });
 
-	// Check the last shared ancestor of each path. This lets us check--are we ever matching A-B-C with A-B-D, *instead of* B-C with B-D?
-	const getSharedAncestor=(left,right,matchIdx)=>{
-		const revLeft=[...left].reverse();
-		/*
+  // Check the last shared ancestor of each path. This lets us check--are we ever matching A-B-C with A-B-D, *instead of* B-C with B-D?
+  const getSharedAncestor = (left, right, matchIdx) => {
+    const revLeft = [...left].reverse();
+    /*
 		const stringify=path=>path.map(b=>b.type).join(".")
 		console.log(stringify(left));
 		console.log(stringify(right));
 		console.log("Intended idx:",matchIdx,left[matchIdx].type);
 		console.log("-".repeat(20));
 		*/
-		const ret= revLeft.find((l_node,index)=>l_node===right[left.length - index - 1]); // For the last (idx 0) left node, map to the last (length-1) real index.
-		return ret;
-	};
+    const ret = revLeft.find(
+      (l_node, index) => l_node === right[left.length - index - 1]
+    ); // For the last (idx 0) left node, map to the last (length-1) real index.
+    return ret;
+  };
 
   const getPairsSharingAncestor = (lastSharedAncestor, ancestorDepth) => {
     const oneToNum = (num) =>
@@ -303,11 +305,17 @@ const extractRelations = (ast, getFeatureId) => {
       return validLeftLengths.flatMap((leftDepth) => {
         const leftNodes = nodesAtDepths[leftDepth - 1];
         const rightNodes = nodesAtDepths[rightDepth - 1];
-        return leftNodes.flatMap((leftNode) => {
-          return rightNodes.map((rightNode) => {
-            return [leftNode, rightNode, ancestorDepth];
-          });
-        }).filter(([leftNode,rightNode])=>getSharedAncestor(leftNode,rightNode,ancestorDepth)===leftNode[ancestorDepth]); // Only match B-C with B-D, not A-B-C with A-B-D.
+        return leftNodes
+          .flatMap((leftNode) => {
+            return rightNodes.map((rightNode) => {
+              return [leftNode, rightNode, ancestorDepth];
+            });
+          })
+          .filter(
+            ([leftNode, rightNode]) =>
+              getSharedAncestor(leftNode, rightNode, ancestorDepth) ===
+              leftNode[ancestorDepth]
+          ); // Only match B-C with B-D, not A-B-C with A-B-D.
       });
     });
   };
@@ -341,8 +349,8 @@ const extractRelations = (ast, getFeatureId) => {
       const orderedProps = propIdxes.flatMap((property) => {
         if (property.startsWith("...")) {
           const restedProp = property.slice(3);
-          const el=node[restedProp];
-					return Array.isArray(el)?el:el.items??el.elements; // TODO define an attribute of, i.e. ArrayExpression, which turns it into an array.
+          const el = node[restedProp];
+          return Array.isArray(el) ? el : el.items ?? el.elements; // TODO define an attribute of, i.e. ArrayExpression, which turns it into an array.
         }
         return [node[property]];
       });
@@ -399,14 +407,16 @@ const extractFunctions = (sess, getFeatureId) => {
     };
   });
 
-	const $varFuncs=sess("VariableDeclarator > :matches(FunctionExpression, ArrowExpression)").parents();
-	const varDeclRelations=$varFuncs.map((varFunc)=>{
-		const {binding,init}=varFunc;
-		return {
-			params:init.params,
-			variable:binding,
-		}
-	});
+  const $varFuncs = sess(
+    "VariableDeclarator > :matches(FunctionExpression, ArrowExpression)"
+  ).parents();
+  const varDeclRelations = $varFuncs.map((varFunc) => {
+    const { binding, init } = varFunc;
+    return {
+      params: init.params,
+      variable: binding,
+    };
+  });
 
   const allRelations = [...declRelations, ...varDeclRelations];
 
@@ -424,7 +434,7 @@ const extractFunctions = (sess, getFeatureId) => {
       .filter((paramId) => {
         const [variable] = sess(paramId).lookupVariable();
         const { references } = variable;
-        const $refs = sess(references.map(ref=>ref.node));
+        const $refs = sess(references.map((ref) => ref.node));
         const $parents = $refs.parents();
         const $calls = $parents.filter(
           (parent) => parent.type === "CallExpression"
@@ -445,9 +455,9 @@ const extractFunctions = (sess, getFeatureId) => {
 
 const collectVarLists = (scope) => [
   [
-		...scope.variableList.filter(isUseful),
-		...[...scope.through._.values()].map(([reference])=>reference.node),
-	], // Lock down both the scope's *owned variables* and its *referenced* variables.
+    ...scope.variableList.filter(isUseful),
+    ...[...scope.through._.values()].map(([reference]) => reference.node),
+  ], // Lock down both the scope's *owned variables* and its *referenced* variables.
   ...scope.children.flatMap(collectVarLists),
 ];
 
@@ -466,4 +476,3 @@ const extractContexts = (sess, getFeatureId) => {
 const isUseful = (variable) =>
   variable.declarations.length + variable.references.length > 0;
 
-console.log(JSON.stringify(extractFeats(ast), null, 2));

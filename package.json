@@ -2,20 +2,24 @@
   "name": "jsnice",
   "version": "1.0.0",
   "description": "",
-  "scripts": {
-  },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "module",
   "dependencies": {
+    "command-line-args": "^5.2.1",
     "dotenv": "^16.0.1",
+    "glob": "^8.0.3",
     "got": "^12.1.0",
     "openai": "^3.0.0",
+    "patch-package": "^6.4.7",
     "shift-codegen": "^8.0.0",
     "shift-parser": "^8.0.0",
     "shift-reducer": "^7.0.0",
     "shift-refactor": "^2.0.0",
     "shift-scope": "^6.0.0"
+  },
+  "scripts": {
+    "postinstall": "patch-package"
   }
 }
