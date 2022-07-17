@@ -2,3 +2,4 @@ model/*
 training_data
 node_modules/
 .env
+training/repos/*

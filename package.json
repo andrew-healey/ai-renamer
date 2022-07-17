@@ -9,6 +9,7 @@
   "dependencies": {
     "command-line-args": "^5.2.1",
     "dotenv": "^16.0.1",
+    "git-clone": "^0.2.0",
     "glob": "^8.0.3",
     "got": "^12.1.0",
     "openai": "^3.0.0",

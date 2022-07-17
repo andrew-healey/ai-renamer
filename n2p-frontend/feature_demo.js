@@ -1,7 +1,8 @@
-import {extractFeats} from './feature_demo.js';
+import {extractFeats} from './extract_features.js';
 import { readFileSync } from "node:fs";
+import {refactor} from "shift-refactor";
 
-const sample = readFileSync("./tests/escape_backslash.js", "utf8");
+const sample = readFileSync("./input.js", "utf8");
 
 const sess = refactor(sample);
 

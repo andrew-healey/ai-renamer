@@ -179,7 +179,7 @@ export const extractFeats = (sess) => {
       if (!(type in nodeAttributes))
         throw new Error("Unknown node type: " + type);
       const { value } = nodeAttributes[type];
-      const val = value ? value(nodeOrVar) : nodeOrVar;
+      const val = value ? value(nodeOrVar) : nodeOrVar.value;
       return {
         v: id,
         giv: encodeURIComponent((val+"").slice(0,maxLength)),
