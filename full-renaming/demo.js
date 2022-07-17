@@ -9,5 +9,7 @@ const code=readFileSync("sample.js","utf8");
 const renamers={nice2predict,jsnice,codex};
 for(let id in renamers){
 	const renamer=renamers[id];
-	console.log(id,await renamer(code))
+	console.log(id)
+	console.log("-".repeat(40))
+	console.log(await renamer(code))
 }

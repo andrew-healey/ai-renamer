@@ -28,3 +28,8 @@ function sumTree(t){
 	}
 	return c
 }
+
+function sendRequest(a,b,c) {
+  b.open('GET', a, false);
+  b.send(c);
+}
