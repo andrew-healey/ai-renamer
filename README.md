@@ -58,6 +58,14 @@ cd UnuglifyJS/
 
 This should create a file of features named `training_data/` at the top level of the monorepo.
 
+### Custom frontend - Generate training set
+
+My own parser, running on UnuglifyJS's source code as well.
+
+```sh
+node n2p-frontend/generate_dataset.js --dir UnuglifyJS > ./training_data
+```
+
 ### Nice2Predict - Training
 
 ```sh

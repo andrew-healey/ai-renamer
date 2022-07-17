@@ -5,6 +5,8 @@ import { codeGen } from "shift-codegen";
 
 const { traverse } = traverser;
 
+const maxLength=64;
+
 /*
 type Leaf = boolean | (ancestry,node)=>Path[];
 type CustomNode = Shift.Node | {type:string};
@@ -48,7 +50,7 @@ const nodeAttributes = {
   LiteralRegExpExpression: {
     leaf,
     type: "RegExp",
-    value: (node) => encodeURIComponent(codeGen(node)),
+    value: (node) => codeGen(node),
   },
   _StaticProperty: {
     leaf,
@@ -106,12 +108,15 @@ export const extractFeats = (sess) => {
 
   const featureCache = new Map();
   const getFeatureId = (leafNode) => {
-    if (leafNode.name === "arguments") debugger;
     // Variable | Shift.Node
     const getVar = (node) => {
       try {
         return sess(node).lookupVariable()[0];
       } catch (err) {
+				if(node.type==="BindingIdentifier"){
+					debugger;
+					console.error(err.message,node.type,sess(node).print());
+				}
         return undefined;
       }
     };
@@ -171,11 +176,13 @@ export const extractFeats = (sess) => {
     const { type } = nodeOrVar;
     const isNode = type !== undefined;
     if (isNode) {
+      if (!(type in nodeAttributes))
+        throw new Error("Unknown node type: " + type);
       const { value } = nodeAttributes[type];
-      const val = value ? value(nodeOrVar) : nodeOrVar.value;
+      const val = value ? value(nodeOrVar) : nodeOrVar;
       return {
         v: id,
-        giv: val,
+        giv: encodeURIComponent((val+"").slice(0,maxLength)),
       };
     }
     // Assume it's a variable.
@@ -382,15 +389,15 @@ const extractRelations = (ast, getFeatureId) => {
       return {
         a: left[left.length - 1],
         b: right[right.length - 1],
-        fx: relation,
+        f2: relation,
         aPath: pathToString(left).join(""),
         bPath: pathToString(right).join(""),
       };
     })
-    .map(({ a, b, fx, ...debug }) => ({
+    .map(({ a, b, f2, ...debug }) => ({
       a: getFeatureId(a),
       b: getFeatureId(b),
-      fx,
+      f2,
       //...debug,
     }));
   return featureObjs;
@@ -427,7 +434,7 @@ const extractFunctions = (sess, getFeatureId) => {
     const fnPars = paramIds.map((paramId) => ({
       a: getFeatureId(paramId),
       b: funcId,
-      fx: "FNPAR",
+      f2: "FNPAR",
     }));
 
     const fnCalls = paramIds
@@ -444,7 +451,7 @@ const extractFunctions = (sess, getFeatureId) => {
       .map((paramId) => ({
         a: getFeatureId(paramId),
         b: funcId,
-        fx: "FNCALL",
+        f2: "FNCALL",
       }));
 
     return [...fnPars, ...fnCalls];
@@ -475,4 +482,3 @@ const extractContexts = (sess, getFeatureId) => {
 
 const isUseful = (variable) =>
   variable.declarations.length + variable.references.length > 0;
-
