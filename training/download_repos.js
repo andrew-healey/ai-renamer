@@ -1,5 +1,6 @@
 import clone from "git-clone/promise.js";
 import {readFileSync,rmdirSync,readdirSync} from "node:fs"
+import {exec} from "node:child_process";
 
 const repos=JSON.parse(readFileSync("repos.json", "utf8"));
 
@@ -12,7 +13,8 @@ allRepos.forEach(idx=>rmdirSync(idx,{recursive:true}));
 let idx=0;
 for(let repo of repos){
 	console.log(repo);
-	await clone(repo+".git",idx);
+	await exec('git clone '+repo+'.git '+idx);
+	//await clone(repo+".git",idx);
 	rmdirSync(`${idx}/.git`,{recursive:true});
 	if(idx%20===0) console.log("Cloned #"+idx);
 	idx++;

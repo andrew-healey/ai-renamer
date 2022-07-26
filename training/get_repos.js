@@ -26,4 +26,11 @@ for (const url of topThousandUrls.slice(0, 100)) {
   }
 }
 
+const customRepos=`
+https://github.com/trekhleb/javascript-algorithms
+https://github.com/TheAlgorithms/JavaScript
+`.split("\n").map((x)=>x.trim()).filter((x)=>x);
+
+urls.unshift(...customRepos);
+
 writeFileSync("repos.json", JSON.stringify(urls, null, 2));
