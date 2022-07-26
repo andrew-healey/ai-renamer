@@ -5,7 +5,7 @@ import { codeGen } from "shift-codegen";
 
 const { traverse } = traverser;
 
-const maxLength=64;
+const maxLength = 64;
 
 /*
 type Leaf = boolean | (ancestry,node)=>Path[];
@@ -103,6 +103,20 @@ const nodeAttributes = {
   // TODO the rest
 };
 
+const isConstant = (node) => {
+  const { type } = node;
+  return type !== undefined;
+};
+
+const isGiv = (node, sess) => {
+  if (isConstant(node)) return true;
+  // Assume it's a variable.
+  const globalState = sess.session.globalSession; // type GlobalScope
+  const globalScope = globalState.lookupTable.scope;
+
+  return globalScope.variableList.includes(node);
+};
+
 export const extractFeats = (sess) => {
   const ast = sess.nodes[0];
 
@@ -113,10 +127,10 @@ export const extractFeats = (sess) => {
       try {
         return sess(node).lookupVariable()[0];
       } catch (err) {
-				if(node.type==="BindingIdentifier"){
-					debugger;
-					console.error(err.message,node.type,sess(node).print());
-				}
+        if (node.type === "BindingIdentifier") {
+          debugger;
+          console.error(err.message, node.type, sess(node).print());
+        }
         return undefined;
       }
     };
@@ -128,7 +142,7 @@ export const extractFeats = (sess) => {
     return postLookup;
   };
 
-  const relationalFeats = extractRelations(ast, getFeatureId);
+  const relationalFeats = extractRelations(ast, getFeatureId,sess);
   const functionFeats = extractFunctions(sess, getFeatureId);
   const contextFeats = extractContexts(sess, getFeatureId);
 
@@ -169,24 +183,20 @@ export const extractFeats = (sess) => {
     ...contextsWithId,
   ];
 
-  const globalState = sess.session.globalSession; // type GlobalScope
-  const globalScope = globalState.lookupTable.scope;
-
   const features = [...reSortedMap.entries()].map(([nodeOrVar, id]) => {
-    const { type } = nodeOrVar;
-    const isNode = type !== undefined;
-    if (isNode) {
+    if (isConstant(nodeOrVar)) {
+			const {type}=nodeOrVar;
       if (!(type in nodeAttributes))
         throw new Error("Unknown node type: " + type);
       const { value } = nodeAttributes[type];
       const val = value ? value(nodeOrVar) : nodeOrVar.value;
+			const sanitized=encodeURIComponent((val + "").slice(0, maxLength));
       return {
         v: id,
-        giv: encodeURIComponent((val+"").slice(0,maxLength)),
+        giv: sanitized
       };
     }
-    // Assume it's a variable.
-    const isGlobal = globalScope.variableList.includes(nodeOrVar);
+    const inferred = !isGiv(nodeOrVar,sess);
 
     const { references, declarations } = nodeOrVar;
     assert(references, "Looked-up variable should be a Variable.");
@@ -197,7 +207,7 @@ export const extractFeats = (sess) => {
 
     return {
       v: id,
-      [isGlobal ? "giv" : "inf"]: name,
+      [inferred ? "inf" : "giv"]: name,
     };
   });
 
@@ -215,7 +225,7 @@ export const extractFeats = (sess) => {
   };
 };
 
-const extractRelations = (ast, getFeatureId) => {
+const extractRelations = (ast, getFeatureId,sess) => {
   const ancestry = []; // Constant because I'll use mutations for speed. Queue.
   const pathsFound = [];
 
@@ -262,6 +272,8 @@ const extractRelations = (ast, getFeatureId) => {
 
   const pathTree = createPathTree(pathsFound);
 
+	console.log("pathTree");
+
   // Pick every pair of paths which can be travelled between with <4 steps.
 
   const onlyPaths =
@@ -285,20 +297,13 @@ const extractRelations = (ast, getFeatureId) => {
   // Check the last shared ancestor of each path. This lets us check--are we ever matching A-B-C with A-B-D, *instead of* B-C with B-D?
   const getSharedAncestor = (left, right, matchIdx) => {
     const revLeft = [...left].reverse();
-    /*
-		const stringify=path=>path.map(b=>b.type).join(".")
-		console.log(stringify(left));
-		console.log(stringify(right));
-		console.log("Intended idx:",matchIdx,left[matchIdx].type);
-		console.log("-".repeat(20));
-		*/
     const ret = revLeft.find(
       (l_node, index) => l_node === right[left.length - index - 1]
     ); // For the last (idx 0) left node, map to the last (length-1) real index.
     return ret;
   };
 
-  const getPairsSharingAncestor = (lastSharedAncestor, ancestorDepth) => {
+  const getPairsSharingAncestor = (lastSharedAncestor, ancestorDepth,sess) => {
     const oneToNum = (num) =>
       Array(num)
         .fill(0)
@@ -307,35 +312,57 @@ const extractRelations = (ast, getFeatureId) => {
       getLeavesAtDepth(lastSharedAncestor, depth)
     );
 
-    return oneToNum(3).flatMap((rightDepth) => {
+		const checkIsGiv=node=>isGiv(getFeatureId(node[node.length - 1]),sess);
+
+    const ret = oneToNum(3).flatMap((rightDepth) => {
       const validLeftLengths = oneToNum(4 - rightDepth);
       return validLeftLengths.flatMap((leftDepth) => {
+
+				// I do a bunch of precomputation here to make this computation O(n), not O(n^2).
+				// This speeds up computation *dramatically* when there are many left and rights. One case had about 5k of each.
         const leftNodes = nodesAtDepths[leftDepth - 1];
+				const leftGivs=leftNodes.map(checkIsGiv)
         const rightNodes = nodesAtDepths[rightDepth - 1];
-        return leftNodes
-          .flatMap((leftNode) => {
-            return rightNodes.map((rightNode) => {
-              return [leftNode, rightNode, ancestorDepth];
+				const rightGivs=rightNodes.map(checkIsGiv)
+
+        return leftNodes.flatMap((leftNode,lIdx) => {
+          return rightNodes
+            .filter(
+              (rightNode,rIdx) =>
+                !(
+                  leftGivs[lIdx] &&
+                  rightGivs[rIdx]
+                )
+            )
+            .filter(
+              (rightNode) =>
+                getSharedAncestor(leftNode, rightNode, ancestorDepth) ===
+                leftNode[ancestorDepth]
+            ) // Only match B-C with B-D, not A-B-C with A-B-D.
+            .map((rightNode) => {
+							const ret=[leftNode, rightNode, ancestorDepth];
+              return ret;
             });
-          })
-          .filter(
-            ([leftNode, rightNode]) =>
-              getSharedAncestor(leftNode, rightNode, ancestorDepth) ===
-              leftNode[ancestorDepth]
-          ); // Only match B-C with B-D, not A-B-C with A-B-D.
+        });
       });
     });
+    return ret;
   };
 
-  const getAllPairs = (ancestor, depth = 0) => {
-    const ownPairs = getPairsSharingAncestor(ancestor, depth);
-    const childPairs = Array.isArray(ancestor)
-      ? ancestor.flatMap((child) => getAllPairs(child, depth + 1))
-      : [];
-    return [...ownPairs, ...childPairs];
+  const findPairs = (ancestor, depth,sess) => {
+    const ownPairs=getPairsSharingAncestor(ancestor, depth,sess);
+		if(ownPairs.length){
+			const toMb=num=>Math.round(num/1024/1024);
+			console.log("Found",ownPairs.length+", JS Heap is",toMb(process.memoryUsage().heapUsed),"MB /",toMb(process.memoryUsage().heapTotal),"MB");
+		}
+		const childPairs=Array.isArray(ancestor)?
+			ancestor.flatMap((child)=>findPairs(child,depth+1,sess)):
+			[];
+		return [...ownPairs,...childPairs];
   };
 
-  const allPairs = getAllPairs(pathTree);
+  const allPairs=findPairs(pathTree,0,sess);
+	console.log("Got my pairs, baby")
 
   // TODO stringify all the pairs.
 
