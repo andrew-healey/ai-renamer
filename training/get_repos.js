@@ -10,7 +10,7 @@ const topThousandUrls = [...topThousandMd.matchAll(/\[[^\]]+\]\(([^)]+)/g)].map(
   (x) => x[1]
 );
 
-for (const url of topThousandUrls.slice(0, 100)) {
+for (const url of topThousandUrls) {
   const html = await got(url).text();
   const githubUrl = html.match(
     /<a aria-labelledby="repository"[^\/]+ href="([^"]+)/

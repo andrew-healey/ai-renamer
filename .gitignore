@@ -1,5 +1,8 @@
 model/*
+
 training_data
+neat_data
+
 node_modules/
 .env
 training/repos/*

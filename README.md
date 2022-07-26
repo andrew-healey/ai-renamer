@@ -47,13 +47,39 @@ My version of `libmicrohttpd-dev` is `0.9.66-1`.
 
 ## Running
 
+### Pick training set
+
+#### Custom training set
+
+Generate a training set from a list of JS Git repositories.
+```sh
+cd training/
+```
+
+Optionally, get the repositories first.
+```sh
+node get_repos.js
+```
+
+Now, download the repositories and set the `TRAINING_DIR` variable. This example downloads the top 50.
+```sh
+node download_repos.js 50
+export TRAINING_DIR=$(pwd)/repos
+```
+
+#### Use UnuglifyJS files (simple, small)
+
+```sh
+export TRAINING_DIR=$(pwd)/UnuglifyJS
+```
+
 ### UnuglifyJS - Generate training set
 
 You'll turn your UnuglifyJS source files and `node_modules/` folder into the training set.
 
 ```sh
 cd UnuglifyJS/
-./extract_features.py --dir . > ../training_data
+./extract_features.py --dir $TRAINING_DIR > ../training_data
 ```
 
 This should create a file of features named `training_data/` at the top level of the monorepo.
@@ -63,7 +89,7 @@ This should create a file of features named `training_data/` at the top level of
 My own parser, running on UnuglifyJS's source code as well.
 
 ```sh
-node n2p-frontend/generate_dataset.js --dir UnuglifyJS > ./training_data
+node n2p-frontend/generate_dataset.js --dir $TRAINING_DIR > ./training_data
 ```
 
 ### Nice2Predict - Training
