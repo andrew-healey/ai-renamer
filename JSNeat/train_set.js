@@ -23,11 +23,11 @@ writeFileSync(out, "");
 */
 
 const getFeats=(fileStr)=>{
+	try{
 	const sess=refactor(fileStr);
 
 	const varBatches=getVarBatches(sess);
 	const globalState=sess.session.globalSession;
-debugger;
 
 	const allVariables=[...globalState.variables];
 
@@ -52,10 +52,16 @@ debugger;
 		multiples,
 		tasks,
 	};
+} catch {
+	return {
+		singles:[],
+		multiples:[],
+		tasks:[],
+	};
+}
 }
 
-const directory="../n2p-frontend/tests/";
-const files=await globber(join(directory,"**/*.js"));
+const files=await globber(join(dir,"**/*.js"));
 
 const fileFeats=files.reduce(({singles,multiples,tasks},fileName)=>{
 	const fileStr=readFileSync(fileName, "utf8");
@@ -70,6 +76,7 @@ const fileFeats=files.reduce(({singles,multiples,tasks},fileName)=>{
 	multiples:[],
 	tasks:[]
 });
+// TODO filter out duplicate single var contexts.
 
 const output=JSON.stringify(fileFeats,null,2);
 writeFileSync(out,output);

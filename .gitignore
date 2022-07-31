@@ -1,7 +1,6 @@
 model/*
 
-training_data
-neat_data
+data/
 
 node_modules/
 .env

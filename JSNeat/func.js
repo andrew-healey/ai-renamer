@@ -65,3 +65,11 @@ export const taskFeats=(variable,sess)=>{
 
 	return tokenizeFnName(funcName);
 }
+
+const IoU=(tag,varName,trainingSet)=>{
+	const intersection=trainingSet.tasks.filter(({tokens,vars})=>tokens.has(tag) && vars.has(varName));
+	const union=trainingSet.tasks.filter(({tokens,vars})=>tokens.has(tag) || vars.has(varName));
+	return intersection.length/union.length;
+}
+
+export const taskScore=(fnTags,varName,trainingSet)=>Math.max(...fnTags.map(tag=>IoU(tag,varName,trainingSet)));

@@ -1,13 +1,16 @@
 
+// Feature extraction, mainly for training set.
 const propFeats= (variable,sess)=>{
 	const {references}=variable;
 	// TODO maybe convert computed to static
 	const $refs=sess(references.map(ref=>ref.node));
 	const whitelist=["StaticMemberExpression","StaticMemberAssignmentTarget"]
 	const $dots=$refs.parents().filter(node=>whitelist.includes(node.type));
+	const isMethod=sess(dot).parents().get(0).type==="CallExpression";
 	const features=$dots.map(dot=>({
 		property:dot.property,
-		type:sess(dot).parents().get(0).type==="CallExpression"?"methodCall":"fieldAccess",
+		type:isMethod?"methodCall":"fieldAccess",
+		...(isMethod?{args:sess(dot).parents().get(0).arguments.length}:{}) // TODO use this in comparisons during inference
 	}));
 	return features;
 }
@@ -67,3 +70,22 @@ export default (variable,sess)=>[
 	...propFeats(variable,sess),
 	...roleFeats(variable,sess),
 ]
+
+// Relation graph logic.
+
+// Find percent of minified names that are also used in candidate.
+const matchingScore=(minified,candidate)=>{
+	const minifiedMatch=minified.filter(name=>candidate.includes(name));
+	const matchScore= minifiedMatch.length/minified.length;
+	return matchScore;
+}
+
+const getCandidateGraphs=(candidateName,trainingSet)=>trainingSet.singles.filter(single=>single.name===candidateName).map(single=>single.feats);
+
+const getSVC=(minified,candidateName,trainingSet)=>{
+	const candidateGraphs=getCandidateGraphs(candidateName,trainingSet);
+	const matchingScores=candidateGraphs.map(candidateGraph=>matchingScore(minified,candidateGraph));
+	const maxScore=Math.max(...matchingScores);
+
+	return maxScore;
+}
