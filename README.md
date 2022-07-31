@@ -14,6 +14,17 @@ git clone --recurse-submodules https://github.com/andrew-healey/ai-renamer.git
 
 ## Build/Install
 
+### OpenAI
+
+```sh
+pip install --user openai
+touch .env
+echo "CODEX_KEY=" > .env
+echo "FINE_TUNE=" > .env
+```
+
+Put your OpenAI Codex API key in `.env`.
+
 ### Nice2Predict
 
 ```sh
@@ -35,12 +46,7 @@ npm i
 
 ```sh
 npm i
-cd full-renaming
-touch .env
-echo "CODEX_KEY=" > .env
 ```
-
-Enter your OpenAI Codex API key in `.env`.
 
 ## Details
 
@@ -77,12 +83,23 @@ export TRAINING_DIR=$(pwd)/UnuglifyJS
 
 ### Extract training features
 
+**GPT/Codex Fine-tuning**
+
+> This method creates a training set for Codex-based methods only. It will not work with Nice2Predict or JSNeat.
+
+```sh
+node codex/fine-tune.js --dir ./training/repos --out ./data/codex.jsonl
+openai tools fine_tunes.prepare_data -f data/codex.jsonl
+```
+Follow the prompts. If it puts you in `pdb)`, then enter `continue`.
+This should place `codex_prepared.jsonl` in the `data/` folder.
+
 **JSNeat**
 
 > This extraction method only works with JSNeat. It does *not* work with Nice2Predict.
 
 ```sh
-node JSNeat/train_set.js --dir $TRAINING_DIR --out neat_data
+node JSNeat/train_set.js --dir $TRAINING_DIR --out data/neat
 ```
 
 **UnuglifyJS**
@@ -91,7 +108,7 @@ You'll turn your UnuglifyJS source files and `node_modules/` folder into the tra
 
 ```sh
 cd UnuglifyJS/
-./extract_features.py --dir $TRAINING_DIR > ../training_data
+./extract_features.py --dir $TRAINING_DIR > ../data/n2p
 ```
 
 This should create a file of features named `training_data/` at the top level of the monorepo.
@@ -101,7 +118,7 @@ This should create a file of features named `training_data/` at the top level of
 My own parser, running on UnuglifyJS's source code as well.
 
 ```sh
-node n2p-frontend/generate_dataset.js --dir $TRAINING_DIR > ./training_data
+node n2p-frontend/generate_dataset.js --dir $TRAINING_DIR > ./data/n2p
 ```
 
 ### Nice2Predict
@@ -111,7 +128,7 @@ node n2p-frontend/generate_dataset.js --dir $TRAINING_DIR > ./training_data
 ```sh
 export BASE_PATH=$(pwd)
 cd Nice2Predict/
-bazel run n2p/training/train_json -- --logtostderr -num_threads 16 --input $BASE_PATH/training_data --out_model $BASE_PATH/model/
+bazel run n2p/training/train_json -- --logtostderr -num_threads 16 --input $BASE_PATH/data/n2p --out_model $BASE_PATH/model/
 ```
 
 This will create a folder `model/` at the monorepo level.
@@ -130,3 +147,24 @@ npx serve Nice2Predict/viewer
 ```
 
 Now, go to `http://localhost:3000/viewer.html`.
+
+### Codex
+
+***Training***
+
+Choose which size model you want to train on. Curie worked for me, for about $5.50. Then start a fine tune task with that model.
+```sh
+openai api fine_tunes.create -t codex_data_prepared.jsonl -m {ada,babbage,curie,davinci}
+```
+This will output a task ID.
+
+Once it's started, you can show the run logs with the following.
+```sh
+openai api fine_tunes.follow -i <taskID>
+```
+
+Once it finishes, it will give you a model ID, like `curie:ft-personal-2022-08-02-06-51-01`. Place this in `.env` as `FINE_TUNE`.
+
+***Inference***
+
+I haven't finished inference yet, but you can run `node codex/test.js` for a demo.
