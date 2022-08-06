@@ -3,7 +3,7 @@ import {refactor} from "shift-refactor"
 import {readFileSync} from "node:fs";
 
 import singleFeats from "./single_var.js"
-import {getScope} from "./util.js"
+import {getScope} from "./util.ts"
 
 const text=readFileSync("../n2p-frontend/input.js", "utf8");
 const sess=refactor(text);

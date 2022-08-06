@@ -5,7 +5,7 @@ import {refactor} from "shift-refactor"
 import { readFileSync, appendFileSync, writeFileSync } from "node:fs";
 import glob from "glob";
 import { join } from "node:path";
-import {varFilter} from "./util.js"
+import {varFilter} from "./util.ts"
 
 import { promisify } from "util";
 const globber = promisify(glob);

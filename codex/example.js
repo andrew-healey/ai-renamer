@@ -1,4 +1,4 @@
-import {getAllVars} from "./util.js"
+import {getAllVars} from "./util.ts"
 import {readFileSync} from "node:fs";
 import {refactor} from "shift-refactor"
 

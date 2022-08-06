@@ -1,4 +1,4 @@
-import {is} from "./util.js"
+import {is} from "./util.ts"
 
 export const getFuncName=(funcNode,sess)=>{
 		const { name } = funcNode;

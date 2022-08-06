@@ -9,7 +9,7 @@ const { default: GPT3Tokenizer } = tokenizerModule;
 import { promisify } from "util";
 const globber = promisify(glob);
 
-import { blacklist, getOrderedVariables,shuffle } from "./util.js";
+import { blacklist, getOrderedVariables,shuffle } from "./util.ts";
 
 import clArgs from "command-line-args";
 const { dir, out } = clArgs([

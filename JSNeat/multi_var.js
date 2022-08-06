@@ -1,6 +1,6 @@
 import {getFuncName,taskScore} from "./func.js";
 import {getSVC} from "./single_var.js";
-import {getScope,varFilter} from "./util.js";
+import {getScope,varFilter} from "./util.ts";
 
 // Mostly training data extractors.
 const getVarPairings=(currScope,parentFunc)=>{
