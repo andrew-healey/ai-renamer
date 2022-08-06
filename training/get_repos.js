@@ -11,25 +11,41 @@ const topThousandUrls = [...topThousandMd.matchAll(/\[[^\]]+\]\(([^)]+)/g)].map(
 );
 
 for (const url of topThousandUrls) {
-  const html = await got(url).text();
-  const githubUrl = html.match(
-    /<a aria-labelledby="repository"[^\/]+ href="([^"]+)/
-  )?.[1];
-  if (githubUrl) {
-    const repoUrl = githubUrl.match(
-      /https:\/\/github\.com\/[a-zA-Z\-_0-9]+\/[a-zA-Z\-_0-9]+/
-    )?.[0];
-    if (repoUrl) {
-      urls.push(repoUrl);
-      console.log(repoUrl);
+  try {
+    const html = await got(url).text();
+    const githubUrl = html.match(
+      /<a aria-labelledby="repository"[^\/]+ href="([^"]+)/
+    )?.[1];
+    if (githubUrl) {
+      const repoUrl = githubUrl.match(
+        /https:\/\/github\.com\/[a-zA-Z\-_0-9]+\/[a-zA-Z\-_0-9]+/
+      )?.[0];
+      if (repoUrl) {
+        urls.push(repoUrl);
+        console.log(repoUrl);
+      }
     }
+  } catch {
+    break;
   }
 }
 
-const customRepos=`
+const customRepos = `
 https://github.com/trekhleb/javascript-algorithms
 https://github.com/TheAlgorithms/JavaScript
-`.split("\n").map((x)=>x.trim()).filter((x)=>x);
+https://github.com/lessfish/leetcode
+https://github.com/azl397985856/leetcode
+https://github.com/chihungyu1116/leetcode-javascript
+https://github.com/paopao2/leetcode-js
+https://github.com/gabrielgiordan/hackerrank
+https://github.com/swapnilsparsh/30DaysOfJavaScript
+https://github.com/xeoneux/30-Days-of-Code
+https://github.com/MohammedHamzaMalik/100-Days-of-JavaScript-Code
+https://github.com/saidMounaim/100DaysOfCode
+`
+  .split("\n")
+  .map((x) => x.trim())
+  .filter((x) => x);
 
 urls.unshift(...customRepos);
 

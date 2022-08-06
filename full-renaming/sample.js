@@ -1,5 +1,7 @@
 var m = 1080;
 
+const hey=require("hey");
+
 if (window.screen.availWidth == m) {
   console.log("Yes");
 }

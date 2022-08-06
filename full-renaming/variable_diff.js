@@ -1,5 +1,6 @@
 import { refactor } from "shift-refactor";
 import { readFileSync } from "node:fs";
+import {nanoid} from "nanoid";
 
 import { analyze } from "shift-scope";
 import { codeGen } from "shift-codegen";
@@ -8,15 +9,9 @@ import assert from "node:assert";
 import codex from "./codex.js";
 import jsnice from "./jsnice.js";
 
-const sample = readFileSync("sample.js", "utf8");
+import { renameVar,getScope } from "../codex/util.js";
 
-const getScope = (sess) => {
-  const [ast] = sess.nodes;
-
-  return analyze(ast);
-};
-
-// Important note: I filter out *unmodified* variables in order to fix Codex's little mistakes.
+// Important note: I filter out *unmutated* variables in order to fix Codex's little mistakes.
 const filterUnwritten = (variables) =>
   variables.filter((variable) => {
     const { references } = variable;
@@ -38,9 +33,10 @@ const getChangedVariables = async (scope, renamer, sess) => {
   const stringified = sess(scope.astNode).print();
   const ogVars = filterUnwritten(deepVariables(scope));
 
-  const renamedString = await renamer(stringified);
+  const renamedObj = await renamer(stringified,false);
+	if(Array.isArray(renamedObj)) return renamedObj; // i.e. the renamer has given a diff.
   //console.log("Raw renamed string", renamedString);
-  const renamed = refactor(renamedString);
+  const renamed = refactor(renamedObj);
   const newScope = getScope(renamed);
   const newVars = filterUnwritten(deepVariables(newScope));
 
@@ -55,7 +51,7 @@ const getChangedVariables = async (scope, renamer, sess) => {
 
   const varsWithNames = changedVars.map(([old, newV]) => ({
     variable: old,
-    name: newV.name,
+    names: [newV.name],
   }));
 
   return varsWithNames;
@@ -67,24 +63,51 @@ const renameVariables = (changeRecords, whitelist, sess) => {
   );
   console.log(
     "Var changes",
-    filtered.map(({ variable, name }) => `${variable.name} -> ${name}`)
+    filtered.map(({ variable, names }) => `${variable.name} -> ${names[0]}`)
   );
 
-  filtered.forEach(({ variable, name }) => {
+  filtered.forEach(({ variable, names }) => {
     const $refs = sess(variable.references.map((ref) => ref.node));
-    $refs.rename(name);
+    $refs.rename(names[0]);
   });
+
+	return filtered;
 };
 
-const rename = async (scope, sess) => {
+const markVariables = (changeRecords,whitelist,sess)=>{
+	console.log("markVariables",whitelist,changeRecords)
+  const filtered = changeRecords.filter(({ variable }) =>
+    whitelist.includes(variable)
+  );
+
+	const ids=filtered.map(()=>`_${nanoid()}_`);
+	const ogNames=filtered.map(({variable})=>variable.name);
+
+  filtered.forEach(({ variable, names },idx) => {
+		renameVar(variable,ids[idx],sess);
+  });
+
+	const outRecords=filtered.map(({variable,names},idx)=>({
+		originalName:ogNames[idx],
+		id:ids[idx],
+		nameCandidates:[...names,ogNames[idx]]
+	}));
+	console.log("outRecords",outRecords)
+
+	return outRecords;
+}
+
+export const rename = async (scope, sess,shouldMark=false) => {
+	const renameOrMark=(shouldMark)?markVariables:renameVariables;
   // First, try to run this with *all* Codex.
   try {
     const changedVars = await getChangedVariables(scope, codex, sess);
+		console.log("Changed vars",changedVars)
 
     const whitelist = filterUnwritten(deepVariables(scope));
 
     console.log("Ran Codex");
-    return renameVariables(changedVars, whitelist, sess);
+    return renameOrMark(changedVars, whitelist, sess);
   } catch (err) {
     console.error(err);
 
@@ -92,9 +115,10 @@ const rename = async (scope, sess) => {
 
     const { children } = scope;
 
+		const allRenames=[];
     // Handle each child sequentially to avoid going over any rate limits.
     for (let child of children) {
-      await rename(child, sess);
+      allRenames.push(...await rename(child, sess,shouldMark));
     }
 
     const changedVars = await getChangedVariables(scope, jsnice, sess);
@@ -102,13 +126,19 @@ const rename = async (scope, sess) => {
     const whitelist = filterUnwritten(scope.variableList);
 
     console.log("Ran JSNice");
-    return renameVariables(changedVars, whitelist, sess);
+    const ownVars= renameOrMark(changedVars, whitelist, sess);
+		return [...allRenames, ...ownVars];
   }
 };
 
+/*
+const sample = readFileSync("full-renaming/sample.js", "utf8");
 const sess = refactor(sample);
 const scope = getScope(sess);
 
-await rename(scope, sess);
+const renames=await rename(scope, sess,false);
+
+console.log(JSON.stringify(renames,null,2));
 
 console.log(sess.print());
+*/

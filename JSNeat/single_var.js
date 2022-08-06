@@ -74,6 +74,7 @@ export default (variable,sess)=>[
 // Relation graph logic.
 
 // Find percent of minified names that are also used in candidate.
+// Minified is a relationship graph. Candidate is also a relationship graph.
 const matchingScore=(minified,candidate)=>{
 	const minifiedMatch=minified.filter(name=>candidate.includes(name));
 	const matchScore= minifiedMatch.length/minified.length;

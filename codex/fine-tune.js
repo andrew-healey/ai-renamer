@@ -9,6 +9,8 @@ const { default: GPT3Tokenizer } = tokenizerModule;
 import { promisify } from "util";
 const globber = promisify(glob);
 
+import { blacklist, getOrderedVariables,shuffle } from "./util.js";
+
 import clArgs from "command-line-args";
 const { dir, out } = clArgs([
   { name: "dir", alias: "d", type: String, defaultOption: "." },
@@ -45,21 +47,43 @@ const recursiveVariableList = (scope) => [
   ...scope.children.flatMap(recursiveVariableList),
 ];
 
+const noCollisions=(sess,var1,var2)=>{
+	const {scopeOwnerMap,scopeMap,}=sess.session.globalSession;
+	
+	const {declarations,references}=var1;
+	const ogScope=scopeMap.get(var1);
+	const nodesWhereUsed=[...declarations,...references].map(({node})=>node);
+
+	const scopesKnowV2=nodesWhereUsed.some(node=>{
+		// Walk up AST path until we find a scope that owns v2. Once we get to the v1 owner, we're done.
+		let $parent=sess(node);
+		do{
+			$parent=$parent.parent();
+			const parent=$parent.get(0);
+			if(scopeOwnerMap.has(parent)){
+				const currScope=scopeOwnerMap.get(parent);
+				const varNames=currScope.variableList.map(({name})=>name);
+				if(varNames.includes(var2.name)){
+					return true;
+				}
+				if(currScope===ogScope){
+					return false;
+				}
+			}
+		}while($parent.nodes.length>0)
+		return false;
+	});
+
+	return !scopesKnowV2;
+
+}
+
 const makeTrainingData = (scope, sess) => {
-  const variableList = recursiveVariableList(scope); // Get variables owned by self and all children
-  const parentOwnedVars = [...scope.through.keys()].map(
-    (key) => sess(scope.through.get(key)[0].node).lookupVariable()[0]
-  ); // Get variables owned by parent. i.e. window, moment, $
-
-  const renameThrough = Math.random() < 1 / 3; // 1/3rd of the time, rename the "globals".
-
-  const fullList = renameThrough
-    ? [...variableList, ...parentOwnedVars]
-    : variableList;
+  const variableList = getOrderedVariables(sess, scope); // Get variables owned by self and all children
 
   // Check if # of variables is too big or small
 
-  const numVarNames = fullList.length * 5;
+  const numVarNames = variableList.length * 5;
   const alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
   const numToStr = (num) => {
     let str = "";
@@ -78,28 +102,47 @@ const makeTrainingData = (scope, sess) => {
       1
     )[0];
 
-  const varNames = fullList.flatMap((v) => {
+	const repeatableVars=[];
+	const nextName=(variable)=>{
+		const oldName=variable.name;
+		const shouldPreserve=Math.random()<0.25;
+		if(shouldPreserve){
+			return oldName // Design choice. If a *real name* is used, it's not likely to be duped.
+		}
+		const shouldRepeat=Math.random()<0.1;
+		if(shouldRepeat){
+			const goodVar=shuffle(repeatableVars).find((v2)=>noCollisions(sess,variable,v2))
+			if(goodVar){
+				repeatableVars.push(variable);
+				return goodVar.name;
+			}
+			// If no good var found, just continue on.
+		}
+		const newName= randName();
+		repeatableVars.push(variable);
+		return newName;
+	}
+
+  const varNames = variableList.flatMap((v) => {
     // If the variable has a declaration and doesn't seem minified already, then ask Codex to refactor it.
     const { name } = v;
     const { declarations, references } = v;
-    if (declarations.length + references.length > 0) {
-      const [declOrRef] = [...declarations, ...references];
-      const { node } = declOrRef;
+    const [declOrRef] = [...declarations, ...references];
+    const { node } = declOrRef;
 
-      const newName = randName();
+    const newName = nextName(v);
 
-      sess(node).rename(newName);
+    sess(node).rename(newName);
 
-      return [
-        {
-          old: name,
-          new: newName,
-        },
-      ];
-    }
-    return []; // No declaration means it's weird.
+    return [
+      {
+        old: name,
+        new: newName,
+      },
+    ];
   });
 
+  // TODO how to obfuscate names? All unique, or try to match existing method (e.g. dupes between distinct scopes, some % of names real, some % fake)
   const outTargets = varNames.map(({ new: newName }) => newName).join(","); // i.e. "ab,uy,poi,asd,fgh"
   const outLabels = varNames
     .map(({ old, new: newName }) => ` ${newName} ${old}`)
@@ -121,8 +164,10 @@ ${outTargets}
   };
 };
 
-const maxCompression=300;
-const maxLines=10_000;
+const longestLine = 1000;
+const maxCompression = 100;
+const maxLines = 10_000;
+const minLines = 5;
 
 const getLen = (str) => tokenizer.encode(str).bpe.length;
 
@@ -137,30 +182,32 @@ const epochs = 4;
 const tokenLimit = Math.floor(dollarBudget / (epochs * dollarsPerToken));
 console.log(tokenLimit, "tokens to collect.");
 
-files
+shuffle(files)
   .filter((file) => {
-    const isTest = file.endsWith(".test.js");
+    const isTest = file.includes("test");
     const isMin = file.endsWith(".min.js");
     return !(isTest || isMin);
   })
   // Shuffle the array
-  .map((value) => ({ value, sort: Math.random() }))
-  .sort((a, b) => a.sort - b.sort)
-  .map(({ value }) => value)
   // Pick a random subset of the files
   .forEach((file) => {
     if (tokensCollected > tokenLimit) {
       return;
     }
-		console.log(file);
 
     try {
       const str = readFileSync(file, "utf8");
 
-			const numLines=str.split("\n").length;
-			const charsPerLine=str.length/numLines;
-			if(charsPerLine>maxCompression) return;
-			if(numLines>maxLines) return;
+      const lines = str.split("\n");
+      const maxCharsPerLine = Math.max(...lines.map((line) => line.length));
+      const numLines = lines.length;
+      const charsPerLine = str.length / numLines;
+
+      if (maxCharsPerLine > longestLine) return;
+      if (charsPerLine > maxCompression) return;
+      if (numLines > maxLines || numLines < minLines) return;
+
+      console.log(file);
 
       const sess = refactor(str);
       const globalSession = sess.session.globalSession;
@@ -180,8 +227,9 @@ files
         tokensCollected += getLen(prompt) + getLen(completion);
       });
     } catch (err) {
-      console.log("Err", err.message, file);
-      //throw err;
+      if (!err.message.includes("not parse"))
+        console.log("Err", err.message, file);
+      if (err.message.includes("sess is not")) throw err;
     }
   });
 

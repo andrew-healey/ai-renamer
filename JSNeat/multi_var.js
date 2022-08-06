@@ -126,6 +126,11 @@ const makeGoodNameCombos=(funcTags,minifiedVars,trainingSet)=>{
 	}; // Best combos of names for each variable.
 }
 
+const findNameCandidates=(relGraph,funcTags,trainingSet)=>{
+	g
+}
+
 // Pick minified var which has a candidate name that has the best individual score
 const getBestIdx=(relGraphs,funcTags,trainingSet)=>{
+
 }

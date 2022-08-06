@@ -44,7 +44,7 @@ console.log(await getRenames(`function b(e, t) {
     }
   }
   return n;
-}`, `e,t,n,r,i`))
+}`, `b,e,t,n,r,i`))
 
 console.log("No name, extra noise:")
 console.log(await getRenames(`const get = function(a,c){
@@ -68,7 +68,7 @@ function b(e, t) {
   return n;
 }
 var q=window.screen.availWidth;
-}`, `e,t,n,r,i,a,c,p,q`))
+}`, `get,a,c,makeRequest,p,e,t,n,r,i,a,c,p,q`))
 
 console.log("With named function:")
 console.log(await getRenames(`function chunkData(e, t) {
@@ -84,3 +84,31 @@ console.log(await getRenames(`function chunkData(e, t) {
   }
   return n;
 }`,`e,t,n,r,i`))
+
+console.log("With var collisions:")
+console.log(await getRenames(`
+function chunkData(e, t) {
+  var n = [];
+  var r = e.length;
+  var i = 0;
+  for (; i < r; i += t) {
+    if (i + t < r) {
+      n.push(e.substring(i, i + t));
+    } else {
+      n.push(e.substring(i, r));
+    }
+  }
+  return n;
+}
+
+function sumTree(t){
+	var c=t[1];
+	if(t[0]){
+		c+=sumTree(t[0])
+	}
+	if(t[2]){
+		c+=sumTree(t[2])
+	}
+	return c
+}
+`, `chunkData,e,t,n,r,i,sumTree,t,c`))
