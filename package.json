@@ -20,18 +20,17 @@
     "shift-codegen": "^8.0.0",
     "shift-parser": "^8.0.0",
     "shift-reducer": "^7.0.0",
-    "shift-scope": "^6.0.0",
-    "typescript": "^4.7.4"
+    "shift-scope": "^6.0.0"
   },
   "scripts": {
-    "heroku-prebuild": "export NPM_CONFIG_PRODUCTION=false; export NODE_ENV=development",
-    "build": "tsc && tree dist/",
+    "build": "tsc",
     "start": "ls && node dist/full-renaming/server.js",
     "postinstall": "rm -rf shift-refactor/ && sh run_clone.sh && cd shift-refactor && npm ci --include=dev && npm run build-all && cd .. && npm ln ./shift-refactor"
   },
   "devDependencies": {
     "@types/cors": "^2.8.12",
-    "@types/express": "^4.17.13"
+    "@types/express": "^4.17.13",
+    "typescript": "^4.7.4"
   },
   "type": "module"
 }
