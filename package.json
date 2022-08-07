@@ -26,7 +26,7 @@
   "scripts": {
     "heroku-prebuild": "export NPM_CONFIG_PRODUCTION=false; export NODE_ENV=development",
     "heroku-postbuild": "export NPM_CONFIG_PRODUCTION=true; export NODE_ENV=production;",
-    "build": "tsc",
+    "build": "tsc && tree dist/",
     "start": "ls && node dist/full-renaming/server.js",
     "postinstall": "rm -rf shift-refactor/ && sh run_clone.sh && cd shift-refactor && npm ci --include=dev && npm run build-all && cd .. && npm ln ./shift-refactor"
   },
