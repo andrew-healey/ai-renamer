@@ -25,7 +25,7 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/full-renaming/server.js",
-    "postinstall": "rm -rf shift-refactor/ && sh run_clone.sh && ls shift-refactor/ && cd shift-refactor && npm ci --include=dev && npm run build-all && cd .. && sudo npm ln ./shift-refactor"
+    "postinstall": "rm -rf shift-refactor/ && sh run_clone.sh && ls shift-refactor/ && cd shift-refactor && npm ci --include=dev && npm run build-all && cd .. && npm ln ./shift-refactor"
   },
   "devDependencies": {
     "@types/cors": "^2.8.12",
