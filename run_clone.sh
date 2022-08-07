@@ -1,5 +1,7 @@
 echo $SUBREPO_KEY > /app/id_rsa_refactor
 
+ls /
+
 echo $(cat key_info.txt) > ~/.ssh/config
 
 git clone git@github-refactor:andrew-healey/shift-refactor.git
