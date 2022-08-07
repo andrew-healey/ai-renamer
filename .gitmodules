@@ -4,3 +4,6 @@
 [submodule "Nice2Predict"]
 	path = Nice2Predict
 	url = https://github.com/andrew-healey/Nice2Predict
+[submodule "shift-refactor"]
+	path = shift-refactor
+	url = https://github.com/andrew-healey/shift-refactor.git

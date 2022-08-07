@@ -1,7 +1,7 @@
-import clone from "git-clone/promise.js";
 import {readFileSync,rmdirSync,readdirSync} from "node:fs"
 import {exec} from "node:child_process";
 import {promisify} from "node:util";
+import { assert } from "node:console";
 
 const newExec=promisify(exec);
 
@@ -18,13 +18,12 @@ allRepos.forEach(idx=>rmdirSync(idx,{recursive:true}));
 
 let idx=0;
 for(let repo of repos.slice(0,numRepos)){
-	console.log(repo);
+	assert(repo.match(/^https:\/\/github\.com\/[a-zA-Z\-_0-9]+\/[a-zA-Z\-_0-9]+$/),"Repo is invalid.");
 	try{
-	await newExec('git clone '+repo+'.git '+idx);
+	await newExec('git clone '+repo+'.git '+idx); // Trust that the repo name is not malicious--i.e. any https://github.com/____/____.git is "inert"
 	} catch{
 		console.log("Couldn't clone "+repo);
 	}
-	//await clone(repo+".git",idx);
 	rmdirSync(`${idx}/.git`,{recursive:true});
 	try{
 		const readmeText=readFileSync(`${idx}/README.md`, "utf8");
