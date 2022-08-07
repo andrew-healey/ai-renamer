@@ -1,6 +1,6 @@
 echo $SUBREPO_KEY > /app/id_rsa_refactor
 
-ls /
+ls -a /
 
 echo $(cat key_info.txt) > /etc/ssh/ssh_config
 
