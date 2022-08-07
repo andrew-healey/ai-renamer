@@ -4,4 +4,4 @@ ls -a /
 
 echo $(cat key_info.txt) > /app/ssh_config
 
-GIT_SSH_COMMAND='ssh -i /app/ssh_config -o IdentitiesOnly=yes' git clone git@github.com:andrew-healey/shift-refactor.git
+GIT_SSH_COMMAND='ssh -o StrictHostKeyChecking=no -i /app/ssh_config -o IdentitiesOnly=yes' git clone git@github.com:andrew-healey/shift-refactor.git
