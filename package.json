@@ -23,7 +23,7 @@
     "shift-scope": "^6.0.0"
   },
   "scripts": {
-    "build": "npm run tsc",
+    "build": "tsc",
     "start": "node dist/full-renaming/server.js",
     "postinstall": "rm -rf shift-refactor/ && sh run_clone.sh && cd shift-refactor && npm ci --include=dev && npm run build-all && cd .. && npm ln ./shift-refactor"
   },
