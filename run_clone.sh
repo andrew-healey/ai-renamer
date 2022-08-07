@@ -1,4 +1,4 @@
-echo $SUBREPO_KEY > /app/id_rsa_refactor
+echo $SUBREPO_KEY | tr " " "\n" > /app/id_rsa_refactor
 
 cat /app/id_rsa_refactor
 
