@@ -25,7 +25,7 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/full-renaming/server.js",
-    "postinstall": "git submodule update --init --recursive && cd shift-refactor && npm ci && npm run build-all && cd .. && sudo npm ln ./shift-refactor"
+    "postinstall": "cd shift-refactor && npm ci && npm run build-all && cd .. && sudo npm ln ./shift-refactor"
   },
   "devDependencies": {
     "@types/cors": "^2.8.12",
