@@ -1,3 +1,0 @@
-Host github.com-refactor
-        Hostname github.com
-        IdentityFile=/app/id_rsa_refactor
