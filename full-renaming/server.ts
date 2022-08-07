@@ -77,5 +77,5 @@ app.post("/rename", async (req: Request, res: Response) => {
   res.json(outJson);
 });
 
-const port = 3532;
+const port = process.env.PORT??3532;
 app.listen(port, () => console.log(`Listening on port ${port}`));
