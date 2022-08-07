@@ -1,4 +1,4 @@
-import { Configuration, OpenAIApi } from "openai";
+import { Configuration, CreateCompletionResponseChoicesInner, OpenAIApi } from "openai";
 import { refactor } from "shift-refactor";
 import { Variable } from "shift-scope";
 import assert from "node:assert";
@@ -27,14 +27,17 @@ const configuration = new Configuration({
 });
 const openai = new OpenAIApi(configuration);
 
-const numCandidates=3;
+const numCandidates=7;
+const bestOf=15;
+const temp=0.8;
+const completionModel = "code-davinci-002";
 
 export const edit: Renamer = async (task, asDiff = false) => {
   const response = await openai.createEdit({
     model: "code-davinci-edit-001",
     input: task.code,
     instruction: "Rename the variables to make more sense.",
-    temperature: 0,
+    temperature: temp,
     top_p: 1,
 		n:numCandidates,
   });
@@ -110,7 +113,25 @@ const textSuggestsToSuggests = (task: Task, textSuggests: TextSuggest[]) => {
 
 type TextSuggester=(task:Task)=>Promise<TextSuggest[][]>;
 
-const getFineTuneSuggests:TextSuggester = async (task) => {
+const suggestsFromChoices=(regex:RegExp,choices:CreateCompletionResponseChoicesInner[]|undefined):TextSuggest[][]=>{
+	if(choices===undefined) throw new Error("Invalid API response.");
+
+  const suggestLists:TextSuggest[][] = choices.map(({ text }) => {
+		if(text===undefined) return undefined;
+    const linesOnly = text.trimStart().trimEnd();
+    const suggests:TextSuggest[] = [...linesOnly.matchAll(regex)].map(
+      ([_, variable, name]) => ({
+				variable,
+				name,
+      })
+    );
+    return suggests;
+  }).filter(Boolean) as TextSuggest[][];
+
+  return suggestLists;
+}
+
+const getFineTuneSuggests = (model:string):TextSuggester => async (task) => {
   const varList = getOrderedVariables(task.sess, task.scope);
 
   const targetList = varList.map((v) => v.name).join(",");
@@ -127,37 +148,25 @@ ${task.code}
 	if(fineTuneModel===undefined) throw new Error("No fine-tune model specified.");
 
   const completion = await openai.createCompletion({
-    model: fineTuneModel,
+    model,
     prompt,
     stop: ["%%%"],
     max_tokens: 500,
-    temperature: 0.5,
+    temperature: temp,
 		n:numCandidates,
+		best_of:bestOf,
   });
 
 	const {data}=completion;
 	const {choices}=data;
 
-	if(choices===undefined) throw new Error("Invalid API response.");
+	const suggestLists=suggestsFromChoices(/(\w+) (\w+)/g,choices);
 
-  const suggestLists:TextSuggest[][] = choices.map(({ text }) => {
-		if(text===undefined) return undefined;
-    const linesOnly = text.trimStart().trimEnd();
-    const suggests:TextSuggest[] = [...linesOnly.matchAll(/(\w+) (\w+)/g)].map(
-      ([_, variable, name]) => ({
-				variable,
-				name,
-      })
-    );
-    return suggests;
-  }).filter(Boolean) as TextSuggest[][];
+	return suggestLists;
 
-  return suggestLists;
 };
 
-const completionModel = "code-davinci-002";
-
-const getPromptSuggests:TextSuggester = async (task) => {
+const getPromptSuggests = (model:string):TextSuggester => async (task) => {
   const prompt = `// Rename the variables to make more sense.
 // Given reference code, make a list of the variables you would rename.
 
@@ -176,29 +185,19 @@ ${task.code}
 //`;
 
   const completion = await openai.createCompletion({
-    model: completionModel,
+    model,
     prompt,
     max_tokens: 100,
-    temperature: 0.5,
+    temperature: temp,
     stop: ["\n\n"],
 		n:numCandidates,
+		best_of:bestOf,
   });
 
 	const {data}=completion;
 	const {choices}=data;
 
-	if(choices===undefined) throw new Error("Invalid API response.");
-
-  const suggestLists:TextSuggest[][] = choices.map(({ text }) => {
-		if(text===undefined) return undefined;
-    const suggests = [...text.matchAll(/(\w+) -> (\w+)/g)].map(
-      ([_, variable, name]) => ({
-        variable,
-				name,
-      })
-    );
-    return suggests;
-  }).filter(Boolean) as TextSuggest[][];
+	const suggestLists=suggestsFromChoices(/(\w+) -> (\w+)/g,choices);
 
   return suggestLists;
 };
@@ -231,7 +230,7 @@ const makeCompletion= (
 	return candidateList;
 };
 
-export const fineTuneCompletion = makeCompletion(getFineTuneSuggests);
-export const promptCompletion = makeCompletion(getPromptSuggests);
+export const fineTuneCompletion = makeCompletion(getFineTuneSuggests(process.env.FINE_TUNE as string));
+export const promptCompletion = makeCompletion(getPromptSuggests(completionModel));
 
 export default promptCompletion;
