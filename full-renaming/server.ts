@@ -45,14 +45,15 @@ const createServerResponse = (
   candidates: Candidates[]
 ): APIResponse => {
   try {
-    const renames = candidates.map(({ variable, names }) => ({
+		const newCandidates=candidates.filter(({variable})=>variable!==undefined);
+    const renames = newCandidates.map(({ variable, names }) => ({
       id: `_${nanoid()}_`,
       name: variable.name,
       candidates: names.filter((n, idx) => names.indexOf(n) === idx), // Remove duplicate suggestions.
     }));
 
     const idSuggestions = renames.map(({ id }, idx) => ({
-      variable: candidates[idx].variable,
+      variable: newCandidates[idx].variable,
       name: id,
     }));
     const idCandidateList = sListTocList(idSuggestions);
