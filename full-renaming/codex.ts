@@ -239,6 +239,9 @@ const makeCompletion =
 
     const candidateList = mergesListsTocList(sLists);
 
+		// Log any blank suggestions.
+		if(candidateList.find(({variable})=>variable===undefined)) console.log("Codex",task.code,candidateList.filter(({variable})=>variable===undefined))
+	
     return candidateList;
   };
 
