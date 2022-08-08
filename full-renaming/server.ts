@@ -1,6 +1,5 @@
 import express, { Express, Request, Response } from "express";
 import cors from "cors";
-import { hierarchicalRenamer } from "./hierarchical.js";
 import { refactor } from "shift-refactor";
 import { getScope } from "../codex/util.js";
 import { nanoid } from "nanoid";
@@ -13,11 +12,13 @@ import {
   sListTocList,
 } from "./renamer.js";
 
-import codex from "./codex.js";
+import codex, { allCompletions } from "./codex.js";
 import jsnice from "./jsnice.js";
+import { hierarchicalRenamer } from "./hierarchical.js";
+import cache from "./redis.js";
 
-const aiRenamer = hierarchicalRenamer(codex, jsnice);
-const renamer = hierarchicalRenamer(aiRenamer, () => []);
+const aiRenamer = cache(hierarchicalRenamer(cache(codex), cache(jsnice)));
+const renamer = cache(hierarchicalRenamer(aiRenamer, () => []));
 
 const app: Express = express();
 
@@ -77,5 +78,5 @@ app.post("/rename", async (req: Request, res: Response) => {
   res.json(outJson);
 });
 
-const port = process.env.PORT??3532;
+const port = process.env.PORT ?? 3532;
 app.listen(port, () => console.log(`Listening on port ${port}`));

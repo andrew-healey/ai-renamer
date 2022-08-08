@@ -102,8 +102,9 @@ export const applyCandidatesList=(task:Task,cList:Candidates[]):string=>{
 export const makeTask=(code:string)=>{
 	const sess=refactor(code);
 	const scope=getScope(sess);
+	const newCode=sess.$(scope.astNode).print();
 	return {
-		code,
+		code:newCode,
 		sess,
 		scope,
 	};

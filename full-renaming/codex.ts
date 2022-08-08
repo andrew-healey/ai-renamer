@@ -1,4 +1,8 @@
-import { Configuration, CreateCompletionResponseChoicesInner, OpenAIApi } from "openai";
+import {
+  Configuration,
+  CreateCompletionResponseChoicesInner,
+  OpenAIApi,
+} from "openai";
 import { refactor } from "shift-refactor";
 import { Variable } from "shift-scope";
 import assert from "node:assert";
@@ -27,9 +31,9 @@ const configuration = new Configuration({
 });
 const openai = new OpenAIApi(configuration);
 
-const numCandidates=7;
-const bestOf=15;
-const temp=0.8;
+const numCandidates = 7;
+const bestOf = 15;
+const temp = 0.8;
 const completionModel = "code-davinci-002";
 
 export const edit: Renamer = async (task, asDiff = false) => {
@@ -39,7 +43,7 @@ export const edit: Renamer = async (task, asDiff = false) => {
     instruction: "Rename the variables to make more sense.",
     temperature: temp,
     top_p: 1,
-		n:numCandidates,
+    n: numCandidates,
   });
 
   const { data } = response;
@@ -70,7 +74,7 @@ const textSuggestsToSuggests = (task: Task, textSuggests: TextSuggest[]) => {
 
   const { suggests } = textSuggests.reduce(
     ({ suggests, ogVarIdx }, currTSuggest) => {
-        const { variable, name } = currTSuggest;
+      const { variable, name } = currTSuggest;
       const variableIdx = (() => {
         // Look ahead for a match.
         const lookAheadVars = varList.slice(ogVarIdx);
@@ -92,7 +96,7 @@ const textSuggestsToSuggests = (task: Task, textSuggests: TextSuggest[]) => {
         return -1;
       })();
 
-      const realVariable= pop(variableIdx) as Variable;
+      const realVariable = pop(variableIdx) as Variable;
       const suggest = {
         variable: realVariable,
         name,
@@ -108,34 +112,41 @@ const textSuggestsToSuggests = (task: Task, textSuggests: TextSuggest[]) => {
     }
   );
 
-	return suggests;
+  return suggests;
 };
 
-type TextSuggester=(task:Task)=>Promise<TextSuggest[][]>;
+type TextSuggester = (task: Task) => Promise<TextSuggest[][]>;
 
-const suggestsFromChoices=(regex:RegExp,choices:CreateCompletionResponseChoicesInner[]|undefined):TextSuggest[][]=>{
-	if(choices===undefined) throw new Error("Invalid API response.");
+const suggestsFromChoices = (
+  regex: RegExp,
+  choices: CreateCompletionResponseChoicesInner[] | undefined
+): TextSuggest[][] => {
+  if (choices === undefined) throw new Error("Invalid API response.");
 
-  const suggestLists:TextSuggest[][] = choices.map(({ text }) => {
-		if(text===undefined) return undefined;
-    const linesOnly = text.trimStart().trimEnd();
-    const suggests:TextSuggest[] = [...linesOnly.matchAll(regex)].map(
-      ([_, variable, name]) => ({
-				variable,
-				name,
-      })
-    );
-    return suggests;
-  }).filter(Boolean) as TextSuggest[][];
+  const suggestLists: TextSuggest[][] = choices
+    .map(({ text }) => {
+      if (text === undefined) return undefined;
+      const linesOnly = text.trimStart().trimEnd();
+      const suggests: TextSuggest[] = [...linesOnly.matchAll(regex)].map(
+        ([_, variable, name]) => ({
+          variable,
+          name,
+        })
+      );
+      return suggests;
+    })
+    .filter(Boolean) as TextSuggest[][];
 
   return suggestLists;
-}
+};
 
-const getFineTuneSuggests = (model:string):TextSuggester => async (task) => {
-  const varList = getOrderedVariables(task.sess, task.scope);
+const getFineTuneSuggests =
+  (model: string): TextSuggester =>
+  async (task) => {
+    const varList = getOrderedVariables(task.sess, task.scope);
 
-  const targetList = varList.map((v) => v.name).join(",");
-  const prompt = `$$$
+    const targetList = varList.map((v) => v.name).join(",");
+    const prompt = `$$$
 ${task.code}
 
 ***
@@ -144,30 +155,32 @@ ${task.code}
 
 ###`;
 
-	const fineTuneModel=process.env.FINE_TUNE;
-	if(fineTuneModel===undefined) throw new Error("No fine-tune model specified.");
+    const fineTuneModel = process.env.FINE_TUNE;
+    if (fineTuneModel === undefined)
+      throw new Error("No fine-tune model specified.");
 
-  const completion = await openai.createCompletion({
-    model,
-    prompt,
-    stop: ["%%%"],
-    max_tokens: 500,
-    temperature: temp,
-		n:numCandidates,
-		best_of:bestOf,
-  });
+    const completion = await openai.createCompletion({
+      model,
+      prompt,
+      stop: ["%%%"],
+      max_tokens: 500,
+      temperature: temp,
+      n: numCandidates,
+      best_of: bestOf,
+    });
 
-	const {data}=completion;
-	const {choices}=data;
+    const { data } = completion;
+    const { choices } = data;
 
-	const suggestLists=suggestsFromChoices(/(\w+) (\w+)/g,choices);
+    const suggestLists = suggestsFromChoices(/(\w+) (\w+)/g, choices);
 
-	return suggestLists;
+    return suggestLists;
+  };
 
-};
-
-const getPromptSuggests = (model:string):TextSuggester => async (task) => {
-  const prompt = `// Rename the variables to make more sense.
+const getPromptSuggests =
+  (model: string): TextSuggester =>
+  async (task) => {
+    const prompt = `// Rename the variables to make more sense.
 // Given reference code, make a list of the variables you would rename.
 
 // Reference code:
@@ -184,53 +197,63 @@ ${task.code}
 // c -> id
 //`;
 
-  const completion = await openai.createCompletion({
-    model,
-    prompt,
-    max_tokens: 100,
-    temperature: temp,
-    stop: ["\n\n"],
-		n:numCandidates,
-		best_of:bestOf,
-  });
+    const completion = await openai.createCompletion({
+      model,
+      prompt,
+      max_tokens: 100,
+      temperature: temp,
+      stop: ["\n\n"],
+      n: numCandidates,
+      best_of: bestOf,
+    });
 
-	const {data}=completion;
-	const {choices}=data;
+    const { data } = completion;
+    const { choices } = data;
 
-	const suggestLists=suggestsFromChoices(/(\w+) -> (\w+)/g,choices);
+    const suggestLists = suggestsFromChoices(/(\w+) -> (\w+)/g, choices);
 
-  return suggestLists;
-};
+    return suggestLists;
+  };
 
 /**
  * Creates a Renamer from a given Codex completion strategy.
  * @param listExtractor A wrapper for a Codex completion model. Takes in text, returns a list of text-based suggestions.
  * @returns A Renamer that uses the Codex completion model.
  */
-const makeCompletion= (
-  listExtractor:TextSuggester
-):Renamer => async (
-  task:Task,
-) => {
+const makeCompletion =
+  (listExtractor: TextSuggester): Renamer =>
+  async (task: Task) => {
+    const suggestLists: TextSuggest[][] = await listExtractor(task);
+    const sLists: Suggest[][] = suggestLists.map((suggests: TextSuggest[]) => {
+      // Ignore blacklisted variable names.
+      const suggestsFiltered = suggests.filter(
+        ({ variable, name }) => !(variable in blacklist || name in blacklist)
+      );
 
-  const suggestLists:TextSuggest[][] = await listExtractor(task);
-  const sLists:Suggest[][] = suggestLists.map((suggests:TextSuggest[]) => {
+      const realSuggests: Suggest[] = textSuggestsToSuggests(
+        task,
+        suggestsFiltered
+      );
+      return realSuggests;
+    });
 
-		// Ignore blacklisted variable names.
-    const suggestsFiltered = suggests.filter(
-      ({ variable, name }) => !(variable in blacklist || name in blacklist)
-    );
+    const candidateList = mergesListsTocList(sLists);
 
-		const realSuggests:Suggest[]=textSuggestsToSuggests(task, suggestsFiltered);
-    return realSuggests;
-  });
+    return candidateList;
+  };
 
-	const candidateList = mergesListsTocList(sLists);
+export const fineTuneCompletion = makeCompletion(
+  getFineTuneSuggests(process.env.FINE_TUNE as string)
+);
 
-	return candidateList;
+const modelOptions = ["code-davinci-002", "code-cushman-001", "text-curie-001"];
+const promptCompletions = Object.fromEntries(
+  modelOptions.map((opt) => [opt, makeCompletion(getPromptSuggests(opt))])
+);
+
+export const allCompletions={
+	...promptCompletions,
+	"fine-tune": fineTuneCompletion,
 };
 
-export const fineTuneCompletion = makeCompletion(getFineTuneSuggests(process.env.FINE_TUNE as string));
-export const promptCompletion = makeCompletion(getPromptSuggests(completionModel));
-
-export default promptCompletion;
+export default promptCompletions["code-davinci-002"];
