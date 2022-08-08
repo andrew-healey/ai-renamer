@@ -54,6 +54,9 @@ const deIndexCandidateList = (
   return candidates;
 };
 
+const expireSeconds=60*60*5; // 5 hours
+await client?.flushDb();
+
 const cacheRenamer = (renamer: Renamer): Renamer =>
   client === undefined
     ? renamer
@@ -64,6 +67,7 @@ const cacheRenamer = (renamer: Renamer): Renamer =>
 
         const result = await renamer(task);
         await client.set(key, JSON.stringify(indexCandidateList(task, result)));
+				await client.expire(key,expireSeconds);
 
         return result;
       };

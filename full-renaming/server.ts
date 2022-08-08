@@ -1,7 +1,5 @@
 import express, { Express, Request, Response } from "express";
 import cors from "cors";
-import { refactor } from "shift-refactor";
-import { getScope } from "../codex/util.js";
 import { nanoid } from "nanoid";
 
 import {
@@ -17,7 +15,8 @@ import jsnice from "./jsnice.js";
 import { hierarchicalRenamer } from "./hierarchical.js";
 import cache from "./redis.js";
 
-const aiRenamer = cache(hierarchicalRenamer(cache(codex), cache(jsnice)));
+const completionModel=allCompletions["fine-tune"]
+const aiRenamer = cache(hierarchicalRenamer(cache(completionModel), cache(jsnice)));
 const renamer = cache(hierarchicalRenamer(aiRenamer, () => []));
 
 const app: Express = express();
