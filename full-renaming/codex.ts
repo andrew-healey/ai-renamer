@@ -32,7 +32,7 @@ const configuration = new Configuration({
 const openai = new OpenAIApi(configuration);
 
 const numCandidates = 7;
-const bestOf = 15;
+const bestOf = 7;
 const temp = 0.8;
 const completionModel = "code-davinci-002";
 
