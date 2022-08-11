@@ -180,7 +180,7 @@ ${task.code}
     return suggestLists;
   };
 
-const maxPromptTokens=3000;
+const maxPromptTokens=500;
 const getPromptSuggests =
   (model: string): TextSuggester =>
   async (task) => {
