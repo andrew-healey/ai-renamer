@@ -38,7 +38,7 @@ const openai = new OpenAIApi(configuration);
 
 const numCandidates = 5;
 const bestOf = 5;
-const temp = 0.8;
+const temp = 0.4;
 
 export const edit: Renamer = async (task, asDiff = false) => {
   const response = await openai.createEdit({
