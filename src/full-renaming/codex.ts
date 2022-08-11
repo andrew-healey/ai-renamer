@@ -27,8 +27,9 @@ type TextSuggest = {
 };
 
 import tokenizerModule from "gpt3-tokenizer";
-//const { default: GPT3Tokenizer } = tokenizerModule;
-const tokenizer = new tokenizerModule({ type: "codex" });
+// @ts-ignore
+const { default: GPT3Tokenizer } = tokenizerModule;
+const tokenizer = new GPT3Tokenizer({ type: "codex" });
 
 const configuration = new Configuration({
   apiKey: process.env.CODEX_KEY,
