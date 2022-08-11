@@ -26,7 +26,7 @@
   "scripts": {
     "build": "tsc && NODE_ENV=production",
     "start": "node dist/full-renaming/server.js",
-    "heroku-prebuild": "rm -rf shift-refactor/ && sh run_clone.sh && cd shift-refactor && npm ci && npm run build-all && cd .. && npm ln ./shift-refactor"
+    "postinstall": "rm -rf shift-refactor/ && sh run_clone.sh && cd shift-refactor && npm ci && npm run build-all && cd .. && npm ln ./shift-refactor"
   },
   "devDependencies": {
     "@types/cors": "^2.8.12",
