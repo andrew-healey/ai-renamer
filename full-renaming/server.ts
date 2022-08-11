@@ -15,7 +15,7 @@ import jsnice from "./jsnice.js";
 import { hierarchicalRenamer } from "./hierarchical.js";
 import cache from "./redis.js";
 
-const completionModel=allCompletions["fine-tune"]
+const completionModel=allCompletions["code-davinci-002"];
 const aiRenamer = cache(hierarchicalRenamer(cache(completionModel), cache(jsnice)));
 const renamer = cache(hierarchicalRenamer(aiRenamer, () => []));
 

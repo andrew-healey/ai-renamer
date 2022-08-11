@@ -26,6 +26,10 @@ type TextSuggest = {
   name: string;
 };
 
+import tokenizerModule from "gpt3-tokenizer";
+//const { default: GPT3Tokenizer } = tokenizerModule;
+const tokenizer = new tokenizerModule({ type: "codex" });
+
 const configuration = new Configuration({
   apiKey: process.env.CODEX_KEY,
 });
@@ -176,9 +180,14 @@ ${task.code}
     return suggestLists;
   };
 
+const maxPromptTokens=3000;
 const getPromptSuggests =
   (model: string): TextSuggester =>
   async (task) => {
+
+		const numTokens=tokenizer.encode(task.code).bpe.length;
+
+		if(numTokens>maxPromptTokens) throw new Error("Too many tokens in Scope for prompt.")
     const prompt = `// Rename the variables to make more sense.
 // Given reference code, make a list of the variables you would rename.
 
@@ -253,7 +262,7 @@ const promptCompletions = Object.fromEntries(
   modelOptions.map((opt) => [opt, makeCompletion(getPromptSuggests(opt))])
 );
 
-export const allCompletions={
+export const allCompletions:{[key:string]:Renamer}={
 	...promptCompletions,
 	"fine-tune": fineTuneCompletion,
 };
