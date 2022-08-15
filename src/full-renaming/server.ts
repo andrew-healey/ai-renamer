@@ -14,12 +14,15 @@ import codex, { allCompletions } from "./codex.js";
 import jsnice from "./jsnice.js";
 import { hierarchicalRenamer } from "./hierarchical.js";
 import cache from "./redis.js";
+import { OpenAIApi } from "openai";
 
 const completionModel=allCompletions["code-davinci-002"];
 const aiRenamer = cache(hierarchicalRenamer(cache(completionModel), cache(jsnice)));
 const renamer = cache(hierarchicalRenamer(aiRenamer, () => []));
 
 const app: Express = express();
+
+app.use(express.static("static"))
 
 app.use(
   cors({
