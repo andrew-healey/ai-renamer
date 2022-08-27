@@ -9,7 +9,7 @@ export const getScope = (sess:RefactorSessionChainable):GlobalScope => {
 	return scope;
 };
 
-export const blacklist = ["arguments", "window", "console", "document"];
+export const blacklist = ["arguments", "window", "console", "document","require","chrome"];
 
 const recursiveVariableList = (scope:Scope):Variable[] => [
   ...scope.variableList,

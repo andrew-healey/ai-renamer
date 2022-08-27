@@ -109,3 +109,12 @@ export const makeTask=(code:string)=>{
 		scope,
 	};
 }
+
+export const deDupe = (renamer:Renamer):Renamer => async (task:Task) => {
+	const cList = await renamer(task);
+	const dedupedCList = cList.map(({variable, names}) => ({
+		variable,
+		names:names.filter((n, idx) => names.indexOf(n) === idx) // Remove second, ... occurrences of each name
+	}))
+	return dedupedCList;
+}

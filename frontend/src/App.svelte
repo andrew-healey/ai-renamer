@@ -19,7 +19,7 @@
     status = "loading";
     output = processOutput(await fetchRenamedCode(code));
     status = "complete";
-  }, 0);
+  }, 1_000);
 
   const processOutput = ({ code, renames }) => {
     const renamings = Object.fromEntries(
@@ -85,7 +85,7 @@
     </div>
     <div class="code-output">
       {#if status == "loading"}
-        <p>...loading</p>
+				<div></div>
       {:else if status == "complete"}
         <div class="code">
           {#each output.chunks as chunk}

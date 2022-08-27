@@ -8,6 +8,7 @@ import {
   Task,
   Candidates,
   sListTocList,
+	deDupe,
 } from "./renamer.js";
 
 import codex, { allCompletions } from "./codex.js";
@@ -26,7 +27,8 @@ const completionModel = allCompletions["code-davinci-002"];
 const aiRenamer = cache(
   hierarchicalRenamer(cache(completionModel), cache(jsnice))
 );
-const renamer = cache(hierarchicalRenamer(aiRenamer, () => []));
+const blankFallback = hierarchicalRenamer(aiRenamer, () => [])
+const renamer = deDupe(cache(blankFallback));
 
 const app: Express = express();
 
@@ -85,7 +87,7 @@ const createServerResponse = (
     const renames = newCandidates.map(({ variable, names }) => ({
       id: `_${nanoid()}_`,
       name: variable.name,
-      candidates: names.filter((n, idx) => names.indexOf(n) === idx), // Remove duplicate suggestions.
+      candidates: names, // Remove duplicate suggestions.
     }));
 
     const idSuggestions = renames.map(({ id }, idx) => ({

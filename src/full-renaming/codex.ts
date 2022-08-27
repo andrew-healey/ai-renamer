@@ -38,7 +38,7 @@ const openai = new OpenAIApi(configuration);
 
 const numCandidates = 3;
 const bestOf = 3;
-const temp = 0.3;
+const temp = 0.1;
 
 export const edit: Renamer = async (task, asDiff = false) => {
   const response = await openai.createEdit({
@@ -252,10 +252,18 @@ const makeCompletion =
 
     const candidateList = mergesListsTocList(sLists);
 
+		// Now, prioritize all "no change" suggestions. They usually mean the variable is already named correctly.
+		const reorderedCandidates = candidateList.map(candidate=>{
+			const {variable,names} = candidate;
+			const ogName = variable.name;
+			const sortedNames = names.sort((a,b)=>+(b === ogName) - +(a === ogName)); // Original names go first. Sorting is stable, so order preserved otherwise.
+			return {variable,names:sortedNames};
+		})
+
 		// Log any blank suggestions.
-		if(candidateList.find(({variable})=>variable===undefined)) console.log("Codex",task.code,candidateList.filter(({variable})=>variable===undefined))
+		if(reorderedCandidates.find(({variable})=>variable===undefined)) console.log("Codex",task.code,reorderedCandidates.filter(({variable})=>variable===undefined))
 	
-    return candidateList;
+    return reorderedCandidates;
   };
 
 export const fineTuneCompletion = makeCompletion(
