@@ -54,8 +54,9 @@ const deIndexCandidateList = (
   return candidates;
 };
 
-const expireSeconds=60*60*5; // 5 hours
-await client?.flushDb();
+const expireHours = process.env.EXPIRE_HOURS ? parseInt(process.env.EXPIRE_HOURS) : 24*7;
+const expireSeconds=  60*60*expireHours;
+if((process.env.FLUSH ?? "false") == "true") await client?.flushDb();
 
 const cacheRenamer = (renamer: Renamer): Renamer =>
   client === undefined

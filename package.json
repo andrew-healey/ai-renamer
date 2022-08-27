@@ -6,6 +6,8 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@sentry/node": "^7.11.1",
+    "@sentry/tracing": "^7.11.1",
     "command-line-args": "^5.2.1",
     "cors": "^2.8.5",
     "dotenv": "^16.0.1",
@@ -24,9 +26,10 @@
     "shift-scope": "^6.0.0"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && npm run frontend_build",
+		"frontend_build":"cd frontend && sh -c 'npm run build'",
     "start": "node dist/full-renaming/server.js",
-    "postinstall": "rm -rf shift-refactor/ && sh run_clone.sh && cd shift-refactor && npm ci && npm run build-all && cd .. && npm ln ./shift-refactor"
+    "heroku-prebuild": "rm -rf shift-refactor/ && sh run_clone.sh && cd shift-refactor && npm ci && npm run build-all && cd .. && npm ln ./shift-refactor"
   },
   "devDependencies": {
     "@types/cors": "^2.8.12",

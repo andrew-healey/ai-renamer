@@ -36,9 +36,9 @@ const configuration = new Configuration({
 });
 const openai = new OpenAIApi(configuration);
 
-const numCandidates = 5;
-const bestOf = 5;
-const temp = 0.4;
+const numCandidates = 3;
+const bestOf = 3;
+const temp = 0.3;
 
 export const edit: Renamer = async (task, asDiff = false) => {
   const response = await openai.createEdit({
@@ -186,6 +186,9 @@ const getPromptSuggests =
   (model: string): TextSuggester =>
   async (task) => {
 
+    const varList = getOrderedVariables(task.sess, task.scope);
+    const targetList = varList.map((v) => v.name).join(",");
+
 		const numTokens=tokenizer.encode(task.code).bpe.length;
 
 		if(numTokens>maxPromptTokens) throw new Error("Too many tokens in Scope for prompt.")
@@ -200,6 +203,7 @@ const get = function(a,c){
 
 ${task.code}
 
+List of variables to rename, in order: a,c,${targetList}
 // Output variable renamings (oldName -> newName):
 
 // a -> el

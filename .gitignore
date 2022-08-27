@@ -7,3 +7,5 @@ dist/*
 node_modules/
 .env
 training/repos/*
+
+frontend/public/build/*

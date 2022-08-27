@@ -14,15 +14,47 @@ import codex, { allCompletions } from "./codex.js";
 import jsnice from "./jsnice.js";
 import { hierarchicalRenamer } from "./hierarchical.js";
 import cache from "./redis.js";
-import { OpenAIApi } from "openai";
 
-const completionModel=allCompletions["code-davinci-002"];
-const aiRenamer = cache(hierarchicalRenamer(cache(completionModel), cache(jsnice)));
+import * as Sentry from "@sentry/node";
+import * as Tracing from "@sentry/tracing";
+
+import { config } from "dotenv";
+
+config();
+
+const completionModel = allCompletions["code-davinci-002"];
+const aiRenamer = cache(
+  hierarchicalRenamer(cache(completionModel), cache(jsnice))
+);
 const renamer = cache(hierarchicalRenamer(aiRenamer, () => []));
 
 const app: Express = express();
 
-app.use(express.static("static"))
+const dsn = process.env.SENTRY_URL;
+if (dsn) {
+  Sentry.init({
+    dsn,
+    integrations: [
+      // enable HTTP calls tracing
+      new Sentry.Integrations.Http({ tracing: true }),
+      // enable Express.js middleware tracing
+      new Tracing.Integrations.Express({ app }),
+    ],
+
+    // Set tracesSampleRate to 1.0 to capture 100%
+    // of transactions for performance monitoring.
+    // We recommend adjusting this value in production
+    tracesSampleRate: 1.0,
+  });
+
+  app.use(Sentry.Handlers.requestHandler());
+  // TracingHandler creates a trace for every incoming request
+  app.use(Sentry.Handlers.tracingHandler());
+
+  app.use(Sentry.Handlers.errorHandler());
+}
+
+app.use(express.static("frontend/public"));
 
 app.use(
   cors({
@@ -47,7 +79,9 @@ const createServerResponse = (
   candidates: Candidates[]
 ): APIResponse => {
   try {
-		const newCandidates=candidates.filter(({variable})=>variable!==undefined);
+    const newCandidates = candidates.filter(
+      ({ variable }) => variable !== undefined
+    );
     const renames = newCandidates.map(({ variable, names }) => ({
       id: `_${nanoid()}_`,
       name: variable.name,
