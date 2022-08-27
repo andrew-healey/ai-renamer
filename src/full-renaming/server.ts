@@ -8,7 +8,7 @@ import {
   Task,
   Candidates,
   sListTocList,
-	deDupe,
+  deDupe,
 } from "./renamer.js";
 
 import codex, { allCompletions } from "./codex.js";
@@ -18,6 +18,9 @@ import cache from "./redis.js";
 
 import * as Sentry from "@sentry/node";
 import * as Tracing from "@sentry/tracing";
+import { RewriteFrames } from "@sentry/integrations";
+
+import "../sentry_root.js";
 
 import { config } from "dotenv";
 
@@ -27,8 +30,10 @@ const completionModel = allCompletions["code-davinci-002"];
 const aiRenamer = cache(
   hierarchicalRenamer(cache(completionModel), cache(jsnice))
 );
-const blankFallback = hierarchicalRenamer(aiRenamer, () => [])
-const renamer = deDupe(cache(blankFallback));
+
+// When *everything* fails, you'll want to retry later. Don't cache.
+const blankFallback = hierarchicalRenamer(aiRenamer, () => []);
+const renamer = deDupe(blankFallback);
 
 const app: Express = express();
 
@@ -41,6 +46,9 @@ if (dsn) {
       new Sentry.Integrations.Http({ tracing: true }),
       // enable Express.js middleware tracing
       new Tracing.Integrations.Express({ app }),
+      new RewriteFrames({
+        root: global.__rootdir__,
+      }),
     ],
 
     // Set tracesSampleRate to 1.0 to capture 100%
@@ -116,6 +124,10 @@ app.post("/rename", async (req: Request, res: Response) => {
 
   res.json(outJson);
 });
+
+// app.get("/sentry_err",()=>{
+// 	throw new Error("This is a test error");
+// })
 
 const port = process.env.PORT ?? 3532;
 app.listen(port, () => console.log(`Listening on port ${port}`));

@@ -61,7 +61,7 @@
 <main>
   <div class="main">
     <div class="code-buttons">
-      <button on:click={() => (code = sampleInput)}>Run Sample</button>
+      <!-- <button on:click={() => (code = sampleInput)}>Run Sample</button> -->
     </div>
     <div class="output-buttons">
       <button
@@ -70,8 +70,7 @@
             renaming.currentName = renaming.candidates[0];
           }
           output = output;
-        }}>Reset names</button
-      >
+        }}>Reset names</button>
     </div>
     <div class="code-editor">
       <AceEditor

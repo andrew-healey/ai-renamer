@@ -1,8 +1,8 @@
 export default `var m = 1080;
 
-const hey = require("hey");
+const p = require("got");
 
-if (window.screen.availWidth == m) {
+if (window.screen.availHeight == m) {
   console.log("Yes");
 }
 

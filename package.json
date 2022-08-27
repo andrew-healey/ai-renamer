@@ -6,6 +6,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@sentry/integrations": "^7.11.1",
     "@sentry/node": "^7.11.1",
     "@sentry/tracing": "^7.11.1",
     "command-line-args": "^5.2.1",
@@ -23,12 +24,13 @@
     "shift-codegen": "^8.0.0",
     "shift-parser": "^8.0.0",
     "shift-reducer": "^7.0.0",
-    "shift-scope": "^6.0.0"
+    "shift-scope": "^6.0.0",
+    "tslib": "^2.4.0"
   },
   "scripts": {
     "build": "tsc && npm run frontend_build",
-		"frontend_build":"cd frontend && sh -c 'npm run build'",
-    "start": "node dist/full-renaming/server.js",
+    "frontend_build": "cd frontend && sh -c 'npm run build'",
+    "start": "node --enable-source-maps dist/full-renaming/server.js",
     "heroku-prebuild": "rm -rf shift-refactor/ && sh run_clone.sh && cd shift-refactor && npm ci && npm run build-all && cd .. && npm ln ./shift-refactor"
   },
   "devDependencies": {
