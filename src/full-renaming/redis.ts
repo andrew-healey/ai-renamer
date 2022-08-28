@@ -54,21 +54,30 @@ const deIndexCandidateList = (
   return candidates;
 };
 
-const expireHours = process.env.EXPIRE_HOURS ? parseInt(process.env.EXPIRE_HOURS) : 24*7;
-const expireSeconds=  60*60*expireHours;
-if((process.env.FLUSH ?? "false") == "true") await client?.flushDb();
+const expireHours = process.env.EXPIRE_HOURS
+  ? parseInt(process.env.EXPIRE_HOURS)
+  : 24 * 7;
+const expireSeconds = 60 * 60 * expireHours;
+if ((process.env.FLUSH ?? "false") == "true") await client?.flushDb();
 
-const cacheRenamer = (renamer: Renamer): Renamer =>
+export type CacheInfo = {
+  overwriteCache: boolean;
+};
+
+const cacheRenamer = <T>(renamer: Renamer<T>): Renamer<T & CacheInfo> =>
   client === undefined
     ? renamer
     : async (task) => {
+        const { overwriteCache } = task;
         const key = task.code;
-        const value: string | null = await client.get(key);
-        if (value) return deIndexCandidateList(task, JSON.parse(value));
+        if (!overwriteCache) {
+          const value: string | null = await client.get(key);
+          if (value) return deIndexCandidateList(task, JSON.parse(value));
+        }
 
         const result = await renamer(task);
         await client.set(key, JSON.stringify(indexCandidateList(task, result)));
-				await client.expire(key,expireSeconds);
+        await client.expire(key, expireSeconds);
 
         return result;
       };

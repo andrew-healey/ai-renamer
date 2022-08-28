@@ -1,8 +1,8 @@
 export const debounce = (f, timeout = 500) => {
   let timer;
-  return () => {
+  return (should_cancel=false) => {
     if (timer) clearTimeout(timer);
-    timer = setTimeout(f, timeout);
+    if(!should_cancel) timer = setTimeout(f, timeout);
   };
 };
 

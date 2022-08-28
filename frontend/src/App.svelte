@@ -17,7 +17,7 @@
   $: code && debouncedFetchRenamedCode();
   const debouncedFetchRenamedCode = debounce(async () => {
     status = "loading";
-    output = processOutput(await fetchRenamedCode(code));
+    output = processOutput(await fetchRenamedCode(code,true));
     status = "complete";
   }, 1_000);
 
@@ -65,12 +65,14 @@
     </div>
     <div class="output-buttons">
       <button
-        on:click={() => {
-          for (let renaming of Object.values(output.renamings)) {
-            renaming.currentName = renaming.candidates[0];
-          }
-          output = output;
-        }}>Reset names</button>
+        on:click={async () => {
+          debouncedFetchRenamedCode(true);
+
+          status = "loading";
+          output = processOutput(await fetchRenamedCode(code,false));
+          status = "complete";
+        }}>Retry</button
+      >
     </div>
     <div class="code-editor">
       <AceEditor
@@ -84,7 +86,7 @@
     </div>
     <div class="code-output">
       {#if status == "loading"}
-				<div></div>
+        <div />
       {:else if status == "complete"}
         <div class="code">
           {#each output.chunks as chunk}

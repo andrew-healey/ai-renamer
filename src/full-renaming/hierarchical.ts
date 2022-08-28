@@ -13,11 +13,11 @@ import { Renamer,Candidates, Task } from "./renamer.js";
 
 import { renameVar, getScope, throughVars } from "../codex/util.js";
 
-export const hierarchicalRenamer = (
-  preferred: Renamer,
-  fallback: Renamer
-): Renamer => {
-  const ret:Renamer = async (task) => {
+export const hierarchicalRenamer = <T1,T2,T3 extends T1&T2>(
+  preferred: Renamer<T1>,
+  fallback: Renamer<T2>
+): Renamer<T3> => {
+  const ret:Renamer<T3> = async (task) => {
     const { sess,scope } = task;
 
     try {
@@ -46,15 +46,3 @@ export const hierarchicalRenamer = (
   };
   return ret;
 };
-
-/*
-const sample = readFileSync("full-renaming/sample.js", "utf8");
-const sess = refactor(sample);
-const scope = getScope(sess);
-
-const renames=await rename(scope, sess,false);
-
-console.log(JSON.stringify(renames,null,2));
-
-console.log(sess.print());
-*/

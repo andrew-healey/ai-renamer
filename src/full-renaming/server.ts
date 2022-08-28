@@ -1,6 +1,7 @@
 import express, { Express, Request, Response } from "express";
 import cors from "cors";
 import { nanoid } from "nanoid";
+import assert from "node:assert";
 
 import {
   makeTask,
@@ -116,10 +117,14 @@ const createServerResponse = (
 };
 
 app.post("/rename", async (req: Request, res: Response) => {
-  const { code } = req.body;
+  const { code,overwriteCache } = req.body;
 
-  const task = makeTask(code);
-  const candidates = await renamer(task);
+	assert(typeof code === "string", "code is required");
+	assert("overwriteCache" in req.body, "Did not specify cache or no-cache.");
+
+  const task:Task = makeTask(code);
+	const cacheTask = {...task,overwriteCache};
+  const candidates = await renamer(cacheTask);
   const outJson: APIResponse = createServerResponse(task, candidates);
 
   res.json(outJson);

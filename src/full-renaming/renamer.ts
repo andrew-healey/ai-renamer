@@ -22,7 +22,7 @@ export type Task = {
 
 type MaybePromise<T> = T | Promise<T>;
 
-export type Renamer = (task:Task) => MaybePromise<Candidates[]>;
+export type Renamer<T={}> = (task:Task & T) => MaybePromise<Candidates[]>;
 
 /**
  * Convert a modified code snippet to a list of suggestions.
@@ -110,7 +110,7 @@ export const makeTask=(code:string)=>{
 	};
 }
 
-export const deDupe = (renamer:Renamer):Renamer => async (task:Task) => {
+export const deDupe = <T>(renamer:Renamer<T>):Renamer<T> => async (task) => {
 	const cList = await renamer(task);
 	const dedupedCList = cList.map(({variable, names}) => ({
 		variable,
