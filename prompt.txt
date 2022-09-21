@@ -1,0 +1,49 @@
+// Rename the variables to make more sense.
+// Given reference code, make a list of the variables you would rename.
+
+// Reference code:
+
+const get = function(a,c){
+  return a.getElementById(c);
+}
+
+var m = 1080;
+const p = require("got");
+if (window.screen.availHeight == m) {
+  console.log("Yes");
+}
+function chunkData(e, t) {
+  var n = [];
+  var r = e.length;
+  var i = 0;
+  for (; i < r; i += t) {
+    if (i + t < r) {
+      n.push(e.substring(i, i + t));
+    } else {
+      n.push(e.substring(i, r));
+    }
+  }
+  return n;
+}
+function sumTree(t) {
+  var c = t[1];
+  if (t[0]) {
+    c += sumTree(t[0]);
+  }
+  if (t[2]) {
+    c += sumTree(t[2]);
+  }
+  return c;
+}
+function sendRequest(a, b, c) {
+  b.open("GET", a, false);
+  b.send(c);
+}
+
+
+List of variables to rename, in order: get,a,c,m,p,chunkData,e,t,n,r,i,sumTree,t,c,sendRequest,a,b,c
+
+// get -> get
+// a -> el, element, container
+// c -> id, elId
+//

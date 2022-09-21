@@ -68,18 +68,13 @@ export const sListTocList=(sList:Suggest[]):Candidates[]=>sList.map(({variable,n
 	names:[name]
 }));
 
-/**
- * Convert N separate lists of name suggestions into one list, with N candidates for each variable.
- * @param sLists List of independent suggestion lists. These could be i.e. idx,ret; index,returnVal
- * @returns Merged candidates list. This would be idx,index; ret,returnVal.
- */
-export const mergesListsTocList=(sLists:Suggest[][]):Candidates[]=>{
+export const mergecLists = (cLists: Candidates[][]): Candidates[] => {
 	type CMap=Map<Variable,string[]>;
-  const candidateMap:CMap = sLists.reduce((cMap:CMap, sList) => {
-    sList.forEach((suggestion) => {
-      const { variable, name } = suggestion;
+  const candidateMap:CMap = cLists.reduce((cMap:CMap, cList) => {
+    cList.forEach((candidate) => {
+      const { variable, names } = candidate;
       if (!cMap.has(variable)) cMap.set(variable, []);
-      (cMap.get(variable) as string[]).push(name);
+      (cMap.get(variable) as string[]).push(...names);
     });
     return cMap;
   }, new Map());
@@ -88,7 +83,14 @@ export const mergesListsTocList=(sLists:Suggest[][]):Candidates[]=>{
     names,
   }));
 	return cList;
-};
+}
+
+/**
+ * Convert N separate lists of name suggestions into one list, with N candidates for each variable.
+ * @param sLists List of independent suggestion lists. These could be i.e. idx,ret; index,returnVal
+ * @returns Merged candidates list. This would be idx,index; ret,returnVal.
+ */
+export const mergesListsTocList=(sLists:Suggest[][]):Candidates[]=>mergecLists(sLists.map(sListTocList));
 
 export const applyCandidatesList=(task:Task,cList:Candidates[]):string=>{
 	// Rename variables in-place, stringify, then recover them.

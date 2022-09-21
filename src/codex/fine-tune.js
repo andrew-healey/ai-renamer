@@ -34,8 +34,7 @@ const minVars = 3;
 
 const findValidScopes = (scope, sess) => {
   const scopeStr = sess(scope.astNode).print();
-  const { bpe } = tokenizer.encode(scopeStr);
-  if (bpe.length > maxLength) {
+  if (getLength(scopeStr) > maxLength) {
     // This scope is too big.
     return scope.children.flatMap((scope) => findValidScopes(scope, sess));
   }

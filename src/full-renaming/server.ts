@@ -130,9 +130,5 @@ app.post("/rename", async (req: Request, res: Response) => {
   res.json(outJson);
 });
 
-// app.get("/sentry_err",()=>{
-// 	throw new Error("This is a test error");
-// })
-
 const port = process.env.PORT ?? 3532;
 app.listen(port, () => console.log(`Listening on port ${port}`));

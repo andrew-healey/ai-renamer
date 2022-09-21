@@ -7,6 +7,8 @@ import { refactor } from "shift-refactor";
 import { Variable } from "shift-scope";
 import assert from "node:assert";
 
+import {writeFileSync} from "node:fs";
+
 import findLastIndex from "find-last-index";
 
 import { blacklist, getOrderedVariables, renameVar } from "../codex/util.js";
@@ -16,6 +18,8 @@ import {
   Suggest,
   Task,
   mergesListsTocList,
+	mergecLists,
+	Candidates,
 } from "./renamer.js";
 
 import { config } from "dotenv";
@@ -23,7 +27,7 @@ config();
 
 type TextSuggest = {
   variable: string;
-  name: string;
+  names: string[];
 };
 
 import tokenizerModule from "gpt3-tokenizer";
@@ -36,9 +40,9 @@ const configuration = new Configuration({
 });
 const openai = new OpenAIApi(configuration);
 
-const numCandidates = 3;
-const bestOf = 3;
-const temp = 0.1;
+const numCandidates = 2;
+const bestOf = 2;
+const temp = 0.2;
 
 export const edit: Renamer = async (task, asDiff = false) => {
   const response = await openai.createEdit({
@@ -67,18 +71,18 @@ export const edit: Renamer = async (task, asDiff = false) => {
 };
 
 /**
- * Convert name-only suggestions to real Variable-string pairs.
+ * Convert name-only suggestions to real Variable-string[] pairs.
  * @param task Usual input task info.
  * @param textSuggests Has a modified variable *name*, but not *object*.
- * @returns A real suggestion list with variable objects, not names.
+ * @returns A real candidates list with variable objects, not names.
  */
-const textSuggestsToSuggests = (task: Task, textSuggests: TextSuggest[]) => {
+const textSuggestsToCandidates= (task: Task, textSuggests: TextSuggest[]) => {
   const varList = getOrderedVariables(task.sess, task.scope);
   const pop = (idx: number): Variable | undefined => varList.splice(idx, 1)[0];
 
-  const { suggests } = textSuggests.reduce(
-    ({ suggests, ogVarIdx }, currTSuggest) => {
-      const { variable, name } = currTSuggest;
+  const { candidates } = textSuggests.reduce(
+    ({ candidates, ogVarIdx }, currTSuggest) => {
+      const { variable, names } = currTSuggest;
       const variableIdx = (() => {
         // Look ahead for a match.
         const lookAheadVars = varList.slice(ogVarIdx);
@@ -101,22 +105,22 @@ const textSuggestsToSuggests = (task: Task, textSuggests: TextSuggest[]) => {
       })();
 
       const realVariable = pop(variableIdx) as Variable;
-      const suggest = {
+      const candidate:Candidates = {
         variable: realVariable,
-        name,
+        names,
       };
       return {
-        suggests: [...suggests, suggest],
+        candidates: [...candidates, candidate],
         ogVarIdx: variableIdx,
       };
     },
     {
-      suggests: [] as Suggest[],
+      candidates: [] as Candidates[],
       ogVarIdx: 0,
     }
   );
 
-  return suggests;
+  return candidates;
 };
 
 type TextSuggester = (task: Task) => Promise<TextSuggest[][]>;
@@ -132,9 +136,9 @@ const suggestsFromChoices = (
       if (text === undefined) return undefined;
       const linesOnly = text.trimStart().trimEnd();
       const suggests: TextSuggest[] = [...linesOnly.matchAll(regex)].map(
-        ([_, variable, name]) => ({
+        ([_, variable, names]) => ({
           variable,
-          name,
+          names: names.split(", "),
         })
       );
       return suggests;
@@ -176,7 +180,7 @@ ${task.code}
     const { data } = completion;
     const { choices } = data;
 
-    const suggestLists = suggestsFromChoices(/(\w+) (\w+)/g, choices);
+    const suggestLists = suggestsFromChoices(/(\w+) ((\w+(, )?)+)/g, choices);
 
     return suggestLists;
   };
@@ -203,12 +207,14 @@ const get = function(a,c){
 
 ${task.code}
 
-List of variables to rename, in order: a,c,${targetList}
-// Output variable renamings (oldName -> newName):
+List of variables to rename, in order: get,a,c,${targetList}
 
-// a -> el
-// c -> id
+// get -> get
+// a -> el, element, container
+// c -> id, elId
 //`;
+
+//writeFileSync("prompt.txt", prompt);
 
     const completion = await openai.createCompletion({
       model,
@@ -223,7 +229,7 @@ List of variables to rename, in order: a,c,${targetList}
     const { data } = completion;
     const { choices } = data;
 
-    const suggestLists = suggestsFromChoices(/(\w+) -> (\w+)/g, choices);
+    const suggestLists = suggestsFromChoices(/(\w+) -> ((\w+(, )?)+)/g, choices);
 
     return suggestLists;
   };
@@ -237,20 +243,26 @@ const makeCompletion =
   (listExtractor: TextSuggester): Renamer =>
   async (task: Task) => {
     const suggestLists: TextSuggest[][] = await listExtractor(task);
-    const sLists: Suggest[][] = suggestLists.map((suggests: TextSuggest[]) => {
-      // Ignore blacklisted variable names.
-      const suggestsFiltered = suggests.filter(
-        ({ variable, name }) => !(variable in blacklist || name in blacklist)
+    const cLists: Candidates[][] = suggestLists.map((suggests: TextSuggest[]) => {
+      // Remove blacklisted variable suggests.
+      const suggestionsAllowed = suggests.map(
+        ({ variable, names }) => ({
+					variable,
+					names: names.filter((name) => !blacklist.includes(name)),
+				})
       );
 
-      const realSuggests: Suggest[] = textSuggestsToSuggests(
+			// Ignore blacklisted variable targets.
+			const targetsAllowed = suggestionsAllowed.filter(({variable})=>!blacklist.includes(variable))
+
+      const realSuggests: Candidates[] = textSuggestsToCandidates(
         task,
-        suggestsFiltered
+        targetsAllowed
       );
       return realSuggests;
     });
 
-    const candidateList = mergesListsTocList(sLists);
+    const candidateList = mergecLists(cLists);
 
 		// Now, prioritize all "no change" suggestions. They usually mean the variable is already named correctly.
 		const reorderedCandidates = candidateList.map(candidate=>{
