@@ -46,6 +46,7 @@ export default {
   },
   plugins: [
     replace({
+			preventAssignment:true,
       "process.env.NODE_ENV": production
         ? JSON.stringify("production")
         : JSON.stringify("development"),

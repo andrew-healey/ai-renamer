@@ -75,6 +75,10 @@ const cacheRenamer = <T>(renamer: Renamer<T>): Renamer<T & CacheInfo> =>
           if (value) return deIndexCandidateList(task, JSON.parse(value));
         }
 
+        if (!renamer) {
+          console.log("renamer is not a function");
+          debugger;
+        }
         const result = await renamer(task);
         await client.set(key, JSON.stringify(indexCandidateList(task, result)));
         await client.expire(key, expireSeconds);

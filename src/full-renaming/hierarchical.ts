@@ -23,6 +23,7 @@ export const hierarchicalRenamer = <T1,T2,T3 extends T1&T2>(
     try {
       return await preferred(task);
     } catch (err) {
+			console.error(err);
       const { children } = scope;
 			const childCandidateList:Candidates[]=(await Promise.all(children.map(scope=>ret({
 				...task,

@@ -17,6 +17,7 @@
     "glob": "^8.0.3",
     "got": "^12.1.0",
     "gpt3-tokenizer": "^1.1.2",
+    "log4js": "^6.7.0",
     "nanoid": "^4.0.0",
     "openai": "^3.0.0",
     "patch-package": "^6.4.7",

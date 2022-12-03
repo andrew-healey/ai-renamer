@@ -14,12 +14,17 @@
   let status = "complete";
   let currentHover = null;
 
-  $: code && debouncedFetchRenamedCode();
-  const debouncedFetchRenamedCode = debounce(async () => {
-    status = "loading";
-    output = processOutput(await fetchRenamedCode(code,true));
-    status = "complete";
-  }, 1_000);
+	const autoRename = false;
+
+  $: code && autoRename && debouncedRename();
+	const rename = async () => {
+		if(status!=="loading"){
+			status = "loading";
+			output = processOutput(await fetchRenamedCode(code,true));
+			status = "complete";
+		}
+  };
+  const debouncedRename = debounce(rename, 1_000);
 
   const processOutput = ({ code, renames }) => {
     const renamings = Object.fromEntries(
@@ -60,10 +65,12 @@
 
 <main>
   <div class="main">
-    <div class="code-buttons">
-      <!-- <button on:click={() => (code = sampleInput)}>Run Sample</button> -->
-    </div>
-    <div class="output-buttons">
+		{#if !autoRename}
+			<div class="code-buttons">
+				<button on:click={rename}>Rename</button>
+			</div>
+		{/if}
+    <!-- <div class="output-buttons">
       <button
         on:click={async () => {
           debouncedFetchRenamedCode(true);
@@ -73,7 +80,7 @@
           status = "complete";
         }}>Retry</button
       >
-    </div>
+    </div> -->
     <div class="code-editor">
       <AceEditor
         on:input={({ detail }) => (code = detail)}
@@ -125,9 +132,9 @@
     grid-area: code-buttons;
   }
 
-  .output-buttons {
+  /* .output-buttons {
     grid-area: output-buttons;
-  }
+  } */
 
   .code-editor {
     grid-area: code-editor;

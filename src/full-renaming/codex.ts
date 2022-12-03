@@ -7,19 +7,20 @@ import { refactor } from "shift-refactor";
 import { Variable } from "shift-scope";
 import assert from "node:assert";
 
-import {writeFileSync} from "node:fs";
+import { writeFileSync, appendFileSync } from "node:fs";
 
 import findLastIndex from "find-last-index";
 
-import { blacklist, getOrderedVariables, renameVar } from "../codex/util.js";
+import { assertNoDudVars, blacklist, getOrderedVariables, renameVar } from "../codex/util.js";
 import {
   Renamer,
   stringToDiff,
   Suggest,
   Task,
   mergesListsTocList,
-	mergecLists,
-	Candidates,
+  mergecLists,
+  Candidates,
+  stringifycList,
 } from "./renamer.js";
 
 import { config } from "dotenv";
@@ -40,11 +41,34 @@ const configuration = new Configuration({
 });
 const openai = new OpenAIApi(configuration);
 
-const numCandidates = 2;
-const bestOf = 2;
-const temp = 0.2;
+const numCandidates = 1;
+const bestOf = 1;
+const temp = 0;
 
+// const exampleRenames=`// get -> get
+// // a -> el, element, container
+// // c -> id, elId`;
+const exampleRenames = `// get -> get
+// a -> el
+// c -> id`;
+
+const countTokens = (text: string) => tokenizer.encode(text).bpe.length
+const checkMaxTokens = (text:string, maxTokens:number) => assert(countTokens(text)<=maxTokens, `Too many tokens in prompt: ${countTokens(text)}/${maxTokens}`)
+
+import log4js from "log4js";
+const {getLogger} = log4js;
+import { nanoid } from "nanoid";
+
+const editLogger = getLogger();
+editLogger.addContext("renamerName", "codex-edit");
+
+const maxEditTokens=1500;
 export const edit: Renamer = async (task, asDiff = false) => {
+  const renameId = nanoid();
+  editLogger.debug(`Starting rename ${renameId}`);
+
+	checkMaxTokens(task.code, maxEditTokens);
+
   const response = await openai.createEdit({
     model: "code-davinci-edit-001",
     input: task.code,
@@ -58,7 +82,16 @@ export const edit: Renamer = async (task, asDiff = false) => {
 
   const { choices } = data;
 
-  if (choices === undefined) throw new Error("Invalid API response.");
+  if (choices === undefined) {
+    editLogger.error(`No choices returned for rename ${renameId}`);
+    throw new Error("Invalid API response.");
+  }
+
+  editLogger.debug(
+    `Got ${choices.length} choices for rename ${renameId}: ${choices
+      .map((c) => c.text)
+      .join(" \n--------\n ")}`
+  );
 
   const suggestionLists: Suggest[][] = choices
     .map(({ text }) =>
@@ -66,6 +99,9 @@ export const edit: Renamer = async (task, asDiff = false) => {
     )
     .filter(Boolean) as Suggest[][];
   const candidateList = mergesListsTocList(suggestionLists);
+  editLogger.debug(
+    `Candidates list for rename ${renameId}: ${stringifycList(candidateList)}`
+  );
 
   return candidateList;
 };
@@ -76,7 +112,7 @@ export const edit: Renamer = async (task, asDiff = false) => {
  * @param textSuggests Has a modified variable *name*, but not *object*.
  * @returns A real candidates list with variable objects, not names.
  */
-const textSuggestsToCandidates= (task: Task, textSuggests: TextSuggest[]) => {
+const textSuggestsToCandidates = (task: Task, textSuggests: TextSuggest[]) => {
   const varList = getOrderedVariables(task.sess, task.scope);
   const pop = (idx: number): Variable | undefined => varList.splice(idx, 1)[0];
 
@@ -105,7 +141,7 @@ const textSuggestsToCandidates= (task: Task, textSuggests: TextSuggest[]) => {
       })();
 
       const realVariable = pop(variableIdx) as Variable;
-      const candidate:Candidates = {
+      const candidate: Candidates = {
         variable: realVariable,
         names,
       };
@@ -148,9 +184,17 @@ const suggestsFromChoices = (
   return suggestLists;
 };
 
+const fineTuneLogger = getLogger();
+fineTuneLogger.addContext("renamerName", "codex-fine-tune");
+
+const maxFineTuneTokens = 1500;
 const getFineTuneSuggests =
   (model: string): TextSuggester =>
   async (task) => {
+
+		const fineTuneId = nanoid();
+		fineTuneLogger.debug(`Starting fine-tune call ${fineTuneId}`);
+
     const varList = getOrderedVariables(task.sess, task.scope);
 
     const targetList = varList.map((v) => v.name).join(",");
@@ -162,6 +206,11 @@ ${task.code}
 // ${targetList}
 
 ###`;
+
+
+		checkMaxTokens(prompt, maxFineTuneTokens);
+
+		fineTuneLogger.debug(`Prompt for call ${fineTuneId}:\n${prompt}`);
 
     const fineTuneModel = process.env.FINE_TUNE;
     if (fineTuneModel === undefined)
@@ -180,22 +229,34 @@ ${task.code}
     const { data } = completion;
     const { choices } = data;
 
-    const suggestLists = suggestsFromChoices(/(\w+) ((\w+(, )?)+)/g, choices);
+    if (choices) {
+      const firstSuggestedText = choices[0].text;
+			if(firstSuggestedText){
+				fineTuneLogger.debug(`Suggestion for call ${fineTuneId}:\n${firstSuggestedText}`);
+			}
+    }
+
+    const suggestLists = suggestsFromChoices(
+      /([a-zA-Z_$][0-9a-zA-Z_$]*) (([a-zA-Z_$][0-9a-zA-Z_$]*(, )?)+)/g,
+      choices
+    );
 
     return suggestLists;
   };
 
-const maxPromptTokens=500;
+const promptLogger = getLogger();
+promptLogger.addContext("renamerName", "codex-prompt");
+const maxPromptTokens = 1500;
 const getPromptSuggests =
   (model: string): TextSuggester =>
   async (task) => {
 
+		const promptId = nanoid();
+		fineTuneLogger.debug(`Starting prompt call ${promptId}`);
+
     const varList = getOrderedVariables(task.sess, task.scope);
     const targetList = varList.map((v) => v.name).join(",");
 
-		const numTokens=tokenizer.encode(task.code).bpe.length;
-
-		if(numTokens>maxPromptTokens) throw new Error("Too many tokens in Scope for prompt.")
     const prompt = `// Rename the variables to make more sense.
 // Given reference code, make a list of the variables you would rename.
 
@@ -209,12 +270,12 @@ ${task.code}
 
 List of variables to rename, in order: get,a,c,${targetList}
 
-// get -> get
-// a -> el, element, container
-// c -> id, elId
+${exampleRenames}
 //`;
 
-//writeFileSync("prompt.txt", prompt);
+		checkMaxTokens(prompt, maxPromptTokens);
+
+		promptLogger.debug(`Prompt for call ${promptId}:\n${prompt}`);
 
     const completion = await openai.createCompletion({
       model,
@@ -229,10 +290,23 @@ List of variables to rename, in order: get,a,c,${targetList}
     const { data } = completion;
     const { choices } = data;
 
-    const suggestLists = suggestsFromChoices(/(\w+) -> ((\w+(, )?)+)/g, choices);
+    if (choices) {
+      const firstSuggestedText = choices[0].text;
+      if (firstSuggestedText) {
+				promptLogger.debug(`Suggestion for call ${promptId}:\n${firstSuggestedText}`);
+			}
+    }
+
+    const suggestLists = suggestsFromChoices(
+      /([a-zA-Z_$][0-9a-zA-Z_$]*) -> (([a-zA-Z_$][0-9a-zA-Z_$]*(, )?)+)/g,
+      choices
+    );
 
     return suggestLists;
   };
+
+const completionLogger = getLogger();
+completionLogger.addContext("renamerName", "completion");
 
 /**
  * Creates a Renamer from a given Codex completion strategy.
@@ -243,38 +317,55 @@ const makeCompletion =
   (listExtractor: TextSuggester): Renamer =>
   async (task: Task) => {
     const suggestLists: TextSuggest[][] = await listExtractor(task);
-    const cLists: Candidates[][] = suggestLists.map((suggests: TextSuggest[]) => {
-      // Remove blacklisted variable suggests.
-      const suggestionsAllowed = suggests.map(
-        ({ variable, names }) => ({
-					variable,
-					names: names.filter((name) => !blacklist.includes(name)),
-				})
-      );
 
-			// Ignore blacklisted variable targets.
-			const targetsAllowed = suggestionsAllowed.filter(({variable})=>!blacklist.includes(variable))
+    const completionId = nanoid();
+    completionLogger.debug(
+      `Got suggestions from Codex completion model. ID is ${completionId}, lists are ${JSON.stringify(
+        suggestLists
+      )}`
+    );
 
-      const realSuggests: Candidates[] = textSuggestsToCandidates(
-        task,
-        targetsAllowed
-      );
-      return realSuggests;
-    });
+    const cLists: Candidates[][] = suggestLists.map(
+      (suggests: TextSuggest[]) => {
+        // Remove blacklisted variable suggests.
+        const suggestionsAllowed = suggests.map(({ variable, names }) => ({
+          variable,
+          names: names.filter((name) => !blacklist.includes(name)),
+        }));
+
+        // Ignore blacklisted variable targets.
+        const targetsAllowed = suggestionsAllowed.filter(
+          ({ variable }) => !blacklist.includes(variable)
+        );
+
+        const realSuggests: Candidates[] = textSuggestsToCandidates(
+          task,
+          targetsAllowed
+        );
+        return realSuggests;
+      }
+    );
 
     const candidateList = mergecLists(cLists);
 
-		// Now, prioritize all "no change" suggestions. They usually mean the variable is already named correctly.
-		const reorderedCandidates = candidateList.map(candidate=>{
-			const {variable,names} = candidate;
-			const ogName = variable.name;
-			const sortedNames = names.sort((a,b)=>+(b === ogName) - +(a === ogName)); // Original names go first. Sorting is stable, so order preserved otherwise.
-			return {variable,names:sortedNames};
-		})
+    completionLogger.debug(
+      `Deserialized Codex completion suggestions. ID is ${completionId}, cList is\n${stringifycList(
+        candidateList
+      )}`
+    );
 
-		// Log any blank suggestions.
-		if(reorderedCandidates.find(({variable})=>variable===undefined)) console.log("Codex",task.code,reorderedCandidates.filter(({variable})=>variable===undefined))
-	
+    // Now, prioritize all "no change" suggestions. They usually mean the variable is already named correctly.
+    const reorderedCandidates = candidateList.map((candidate) => {
+      const { variable, names } = candidate;
+      const ogName = variable.name;
+      const sortedNames = names.sort(
+        (a, b) => +(b === ogName) - +(a === ogName)
+      ); // Original names go first. Sorting is stable, so order preserved otherwise.
+      return { variable, names: sortedNames };
+    });
+
+    assertNoDudVars(reorderedCandidates);
+
     return reorderedCandidates;
   };
 
@@ -282,14 +373,19 @@ export const fineTuneCompletion = makeCompletion(
   getFineTuneSuggests(process.env.FINE_TUNE as string)
 );
 
-const modelOptions = ["code-davinci-002", "code-cushman-001", "text-curie-001"];
+const modelOptions = [
+  "text-davinci-003",
+  "code-davinci-002",
+  "code-cushman-001",
+  "text-curie-001",
+];
 const promptCompletions = Object.fromEntries(
   modelOptions.map((opt) => [opt, makeCompletion(getPromptSuggests(opt))])
 );
 
-export const allCompletions:{[key:string]:Renamer}={
-	...promptCompletions,
-	"fine-tune": fineTuneCompletion,
+export const allCompletions: { [key: string]: Renamer } = {
+  ...promptCompletions,
+  "fine-tune": fineTuneCompletion,
 };
 
 export default promptCompletions["code-davinci-002"];

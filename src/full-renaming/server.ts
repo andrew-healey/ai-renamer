@@ -3,6 +3,8 @@ import cors from "cors";
 import { nanoid } from "nanoid";
 import assert from "node:assert";
 
+import "./log.js";
+
 import {
   makeTask,
   applyCandidatesList,
@@ -27,7 +29,9 @@ import { config } from "dotenv";
 
 config();
 
-const completionModel = allCompletions["code-davinci-002"];
+const modelName = process.env.MODEL_NAME ?? "davinci-codex-002";
+assert(modelName in allCompletions);
+const completionModel = allCompletions[modelName];
 const aiRenamer = cache(
   hierarchicalRenamer(cache(completionModel), cache(jsnice))
 );
@@ -52,9 +56,6 @@ if (dsn) {
       }),
     ],
 
-    // Set tracesSampleRate to 1.0 to capture 100%
-    // of transactions for performance monitoring.
-    // We recommend adjusting this value in production
     tracesSampleRate: 1.0,
   });
 

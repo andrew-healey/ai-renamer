@@ -9,3 +9,5 @@ node_modules/
 training/repos/*
 
 frontend/public/build/*
+
+logs/*

@@ -15,6 +15,5 @@ export const fetchRenamedCode = async (code,cache) => {
       },
     })
   ).json();
-  //console.log(json);
   return json;
 };

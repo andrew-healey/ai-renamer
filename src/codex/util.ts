@@ -2,6 +2,7 @@ import assert from "node:assert";
 import { refactor, RefactorSessionChainable } from "shift-refactor";
 import { nanoid } from "nanoid";
 import type { Variable, Scope,GlobalScope } from "shift-scope";
+import { Candidates } from "../full-renaming/renamer";
 
 export const getScope = (sess:RefactorSessionChainable):GlobalScope => {
 	const state=sess.session.globalSession;
@@ -76,3 +77,4 @@ export const shuffle = <T>(arr:T[]) =>
     .sort((a, b) => a.sort - b.sort)
     .map(({ value }) => value);
 
+export const assertNoDudVars = (cList: Candidates[]) => assert(cList.every(({variable})=>variable !== undefined));

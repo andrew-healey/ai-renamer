@@ -1,5 +1,12 @@
-import got from "got";
+import got, { RequestError } from "got";
 import {Task,stringToDiff,sListTocList,Renamer} from "./renamer.js";
+import {writeFileSync} from "node:fs";
+
+import { nanoid } from "nanoid";
+import log4js from "log4js";
+import { assertNoDudVars } from "../codex/util.js";
+const jsniceLogger = log4js.getLogger();
+jsniceLogger.addContext("renamerName", "jsnice");
 
 const jsnice:Renamer = async (task:Task) => {
   const options = {
@@ -22,15 +29,23 @@ const jsnice:Renamer = async (task:Task) => {
     body: task.code,
   };
 
+	const jsniceId = nanoid();
+	jsniceLogger.debug(`Creating new JSNice request with id ${jsniceId}`);
+	jsniceLogger.debug(`Input code: ${task.code}`);
+
+	const response = got.post("https://jsnice.org/renamer", reqOptions);
+
+	response.catch((err:RequestError)=>{
+		jsniceLogger.error(`JSNice request ${jsniceId} failed with error:\n${err}`);
+	})
   const body:{
 		js:string,
 		suggest?:{[key:string]:string[]},
-	} = await got.post("http://jsnice.org/beautify", reqOptions).json();
+	} = await response.json();
 
   const strict=body.js;
 	const codeOut= strict.slice(14) // Remove "strict mode".
-
-	console.log("JSNice",codeOut);
+	jsniceLogger.debug(`Output code for request ${jsniceId}: ${codeOut}`);
 
 	const diff=stringToDiff(task,codeOut);
 
@@ -41,7 +56,7 @@ const jsnice:Renamer = async (task:Task) => {
 	})) : sListTocList(diff);
 
 	// Log any blank suggestions.
-	if(cList.find(({variable})=>variable===undefined)) console.log("JSNice",task.code,cList.filter(({variable})=>variable===undefined))
+	assertNoDudVars(cList);
 	
 	return cList;
 };
