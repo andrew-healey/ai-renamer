@@ -42,6 +42,8 @@ const renamer = deDupe(blankFallback);
 
 const app: Express = express();
 
+import "./profile.js"
+
 const dsn = process.env.SENTRY_URL;
 if (dsn) {
   Sentry.init({

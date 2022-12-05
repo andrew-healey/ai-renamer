@@ -26,4 +26,6 @@ COPY --from=builder /usr/src/app/node_modules/ node_modules
 COPY --from=builder /usr/src/app/shift-refactor/ node_modules/shift-refactor
 COPY frontend/public frontend/public
 
+EXPOSE 9229
+
 ENTRYPOINT ["npm","start"]

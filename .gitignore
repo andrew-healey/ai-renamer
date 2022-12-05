@@ -11,3 +11,5 @@ training/repos/*
 frontend/public/build/*
 
 logs/*
+
+profiles/*.heapsnapshot
