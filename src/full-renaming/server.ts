@@ -32,17 +32,19 @@ config();
 const modelName = process.env.MODEL_NAME ?? "davinci-codex-002";
 assert(modelName in allCompletions);
 const completionModel = allCompletions[modelName];
+const chatModel = codex;
 const aiRenamer = cache(
-  hierarchicalRenamer(cache(completionModel), cache(jsnice))
+  hierarchicalRenamer(cache(codex), cache(jsnice))
 );
 
 // When *everything* fails, you'll want to retry later. Don't cache.
 const blankFallback = hierarchicalRenamer(aiRenamer, () => []);
 const renamer = deDupe(blankFallback);
+// const renamer = jsnice;
 
 const app: Express = express();
 
-import "./profile.js"
+// import "./profile.js"
 
 const dsn = process.env.SENTRY_URL;
 if (dsn) {

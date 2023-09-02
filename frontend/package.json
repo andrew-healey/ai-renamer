@@ -29,5 +29,6 @@
     "sirv-cli": "^2.0.0",
     "svelte-ace": "^1.0.21",
     "tippy.js": "^6.3.7"
-  }
+  },
+  "type": "module"
 }

@@ -33,7 +33,7 @@ const jsnice:Renamer = async (task:Task) => {
 	jsniceLogger.debug(`Creating new JSNice request with id ${jsniceId}`);
 	jsniceLogger.debug(`Input code: ${task.code}`);
 
-	const response = got.post("https://jsnice.org/renamer", reqOptions);
+	const response = got.post("http://jsnice.org/beautify", reqOptions);
 
 	response.catch((err:RequestError)=>{
 		jsniceLogger.error(`JSNice request ${jsniceId} failed with error:\n${err}`);

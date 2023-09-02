@@ -3,6 +3,7 @@ import {
   CreateCompletionResponseChoicesInner,
   ChatCompletionRequestMessage,
   OpenAIApi,
+  CreateChatCompletionResponseChoicesInner,
 } from 'openai';
 import { refactor } from 'shift-refactor';
 import { Variable } from 'shift-scope';
@@ -173,13 +174,15 @@ type TextSuggester = (task: Task) => Promise<TextSuggest[][]>;
 
 const suggestsFromChoices = (
   regex: RegExp,
-  choices: CreateCompletionResponseChoicesInner[] | undefined,
+  choices: CreateCompletionResponseChoicesInner[] | CreateChatCompletionResponseChoicesInner[] | undefined,
 ): TextSuggest[][] => {
   if (choices === undefined) throw new Error('Invalid API response.');
 
   const suggestLists: TextSuggest[][] = choices
-    .map(({ text }) => {
-      if (text === undefined) return undefined;
+    .map((choice) => {
+      const text = "message" in choice ? choice.message?.content as string : "text" in choice ? choice.text as string: (assert(false, "Invalid API response."),"");
+      assert(text,"Returned text is undefined.")
+      // if (text === undefined) return undefined;
       const linesOnly = text.trimStart().trimEnd();
       const suggests: TextSuggest[] = [...linesOnly.matchAll(regex)].map(
         ([_, variable, names]) => ({
@@ -316,17 +319,18 @@ ${exampleRenames}
     return suggestLists;
   };
 
-const bigChatThreshold = 3000;
-const maxChatTokens = 8000;
+const bigChatThreshold = 3500;
+const maxChatTokens = 3500;
 const baseChatModel = process.env.CHAT_MODEL ?? 'gpt-3.5-turbo';
-const getChatSuggests =
-  (model: string): TextSuggester =>
+const getChatSuggests:TextSuggester =
   async (task) => {
     const promptId = nanoid();
     fineTuneLogger.debug(`Starting chat call ${promptId}`);
 
     const varList = getOrderedVariables(task.sess, task.scope);
+    // console.log("varList is",varList);
     const targetList = varList.map((v) => v.name).join(', ');
+    if(targetList.length===0) return [];
 
     const chat: ChatCompletionRequestMessage[] = [
       {
@@ -345,7 +349,7 @@ const get = function(a,c){
 const xvm89$$3 = function(num,vuxn2) {
   return num % vuxn2;
 }
-Variables: get, a, c`,
+Variables: get, a, c, xvm89, num, vuxn2`,
       },
       {
         role: 'assistant',
@@ -416,24 +420,29 @@ const makeCompletion =
 
         // Ignore blacklisted variable targets.
         const targetsAllowed = suggestionsAllowed.filter(
-          ({ variable }) => !blacklist.includes(variable),
+          ({ variable,names }) => !blacklist.includes(variable) && names.length>0,
         );
 
         const realSuggests: Candidates[] = textSuggestsToCandidates(
           task,
           targetsAllowed,
         );
-        return realSuggests;
+        return realSuggests.filter(({variable})=>variable);
       },
     );
 
     const candidateList = mergecLists(cLists);
 
+
+    try{
     completionLogger.debug(
       `Deserialized Codex completion suggestions. ID is ${completionId}, cList is\n${stringifycList(
         candidateList,
       )}`,
     );
+      } catch(e){
+        debugger;
+      }
 
     // Now, prioritize all "no change" suggestions. They usually mean the variable is already named correctly.
     const reorderedCandidates = candidateList.map((candidate) => {
@@ -469,4 +478,5 @@ export const allCompletions: { [key: string]: Renamer } = {
   'fine-tune': fineTuneCompletion,
 };
 
-export default promptCompletions['code-davinci-002'];
+// export default promptCompletions['code-davinci-002'];
+export default makeCompletion(getChatSuggests);

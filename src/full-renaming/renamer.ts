@@ -42,7 +42,7 @@ export const stringToDiff = (task: Task, codeOut: string): Suggest[] => {
     const name = newVar.name;
     const oldName = oldVar.name;
     return {
-      variable: newVar,
+      variable: oldVar,
       name,
     };
   });
